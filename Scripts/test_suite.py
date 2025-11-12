@@ -7,9 +7,9 @@ from testrail.testrail_client import TestRailClient
 from xray.xray_client import XrayClient
 
 
-class TestSuite(TestRailClient):
+class TestSuiteExport(TestRailClient):
 
-    def get_test_suite_sections(self,project_id=36,suite_id=637):
+    def export_test_suite_to_xray(self,project_id=36,suite_id=637):
         sections = self.get_all_sections_data(project_id, suite_id)
         xray = XrayClient()
         folder_paths = self.build_folder_paths(sections)
@@ -106,5 +106,5 @@ class TestSuite(TestRailClient):
 
         return path_cache
 
-obj = TestSuite()
-all_cases = obj.get_test_suite_sections()
+obj = TestSuiteExport()
+all_cases = obj.export_test_suite_to_xray()
