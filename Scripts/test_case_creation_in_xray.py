@@ -49,7 +49,7 @@ class TestCaseCreation(TestRailClient):
                         attachment_payload = {'attachments': [{
                             'data': encoded_data,
                             'filename': file_name,
-                            "contentType": "plain/text"
+                            "contentType": "plain/text" #'data:image/png:base64'
                         }]}
                         
                         # Create step first
@@ -58,8 +58,8 @@ class TestCaseCreation(TestRailClient):
                             step_id = xray_step.json()['id']
                             # Upload attachment
                             attachment_url = f"{xray.url}rest/raven/1.0/api/test/{case['key']}/step/{step_id}/attachment"
-                            files = {'file': (file_name, attachment_data, 'application/octet-stream')}
-                            session.put(url=attachment_url, headers=xray.headers, files=files)
+                            files = {'file': (file_name, attachment_data, 'data:image/png:base64')}
+                            session.put(url=attachment_url, headers=xray.headers, json=attachment_payload)
                             # session.put(url=attachment_url, headers=xray.headers, json=attachment_payload)
                     except Exception as e:
                         print(f"Attachment processing failed for ID {attachment_id}: {e}")

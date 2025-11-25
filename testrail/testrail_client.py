@@ -32,6 +32,8 @@ class TestRailClient:
     def get_testrail_username_password(self):
         return self.user, self.password
 
+    def get_custom_fields(self): #TODO
+        return requests.get(url='%s/get_case_fields'%(self.url), headers=self.headers).json()
 
     def get_case(self, case_id):
         return requests.get(url='%s/get_case/%s'%(self.url, case_id), headers=self.headers)
