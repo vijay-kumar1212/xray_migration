@@ -122,7 +122,7 @@ class XrayClient:
             payload['fields']['customfield_12901'] = data['custom_preconds'] #Pre conditions
             payload['fields']['customfield_12903'] = f'S{data['suite_id']}' #Test Suit ID
             payload['fields']['customfield_12906'] = f'C{data['id']}' # Test rail Id
-            payload['fields']['customfield_12904'] = self.FEATURE_MAP[data['custom_feature']] # Feature dictionary TODO
+            payload['fields']['customfield_12904'] = self.FEATURE_MAP[data['custom_feature']] # Feature dictionary
             payload['fields']['customfield_12905'] = data['refs'] #References
             payload['fields']['customfield_12907'] = {'id':self.get_custom_device(data['custom_device'])} # Device
             payload['fields']['customfield_12902'] = {'id': self.xr_test_level[1] if data['type_id'] == 1 else self.xr_test_level[6]} # Test Level Acceptance/Functional
