@@ -9,10 +9,10 @@ from xray.xray_client import XrayClient
 
 class TestCaseCreation(TestRailClient):
 
-    def test_create_case_in_xray(self, case_id=66331235):
+    def test_create_case_in_xray(self, case_id= 65763904): #66331235, 60092721 OMNIA, envision C65763904,RGE 66386708 dbt 62171047, df C869515
         tr_case_data = self.get_case(case_id=case_id).json()
         xray = XrayClient()
-        case = xray.create_issue(data=tr_case_data, issue_type='Test', test_repo='/LCG Digital Master Suite/Vanilla')
+        case = xray.create_issue(data=tr_case_data, issue_type='Test') #test_repo='/LCG Digital Master Suite/Vanilla'
         
         if not case or 'key' not in case:
             return None

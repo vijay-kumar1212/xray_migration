@@ -1,0 +1,129 @@
+{
+  "xray_priority": {
+    "4": "1",
+    "3": "2",
+    "2": "3",
+    "1": "4",
+    "5": "Lowest",
+    "10000": "Urgent",
+    "10001": "Unprioritised"
+  },
+  "dfe_automation_status": {
+    "3": "13500",
+    "1": "13501",
+    "Automation In Progress": "13502",
+    "2": "13503",
+    "Maintenance": "13504",
+    "No Automation Required": "13505",
+    "4": "13500"
+  },
+  "df_automation_status": {
+    "1": "13501",
+    "2": "13503",
+    "3": "13500"
+  },
+  "dbt_automation_status": {
+    "1": "13503",
+    "2": "13501"
+  },
+  "omnia_automation_status": {
+    "1": "New",
+    "2": "Automation Candidate",
+    "3": "13503",
+    "4": "13500",
+    "5": "PR raised yet to merge",
+    "6": "Automated but descoped/deprecated"
+  },
+  "rge_automation_status": {
+    "1": "13503",
+    "2": "13501",
+    "3": "13500",
+    "4": "Automation Candidate",
+    "5": "Automated but descoped/deprecated"
+  },
+  "ukqa_automation_status": {
+    "1": "13501",
+    "2": "Automation Candidate",
+    "3": "13503",
+    "4": "13500",
+    "5": "Automated but descoped/deprecated"
+  },
+  "custom_brand": {
+    "1": "Coral Only",
+    "2": "Ladbrokes Only",
+    "3": "Both Coral and Ladbrokes",
+    "4": "Vanilla Only",
+    "5": "All Brands"
+  },
+  "xr_devices": {
+    "3": "14906",
+    "1": "14907",
+    "13": "14908",
+    "0": "-1"
+  },
+  "omnia_squads": {
+    "1": "Marvels",
+    "3": "Spartans",
+    "2": "Mavericks",
+    "4": "Falcons",
+    "5": "Guardians",
+    "6": "Core Cobras",
+    "7": "Wolfpack (old cell)",
+    "8": "Regression Squad"
+  },
+  "assigned_squad_team_map": {
+    "10832": "OMNIA>Retail Core Cobra",
+    "10833": "OMNIA>Retail Falcons",
+    "10835": "OMNIA>Retail Guardians",
+    "10837": "OMNIA>Retail Marvels",
+    "10839": "OMNIA>Retail Mavericks",
+    "10841": "OMNIA>Retail Spartans",
+    "12113": "UKQA>Envision",
+    "12115": "UKQA>GBS",
+    "12117": "UKQA>Load Testing",
+    "12119": "UKQA>Omnia",
+    "12121": "UKQA>Retail Automation",
+    "12208": "UKQA>Retail CP",
+    "12123": "UKQA>Sportbook Automation",
+    "12125": "UKQA>Sportsbook Regression"
+  },
+  "xr_test_level": {
+    "-1": "None",
+    "1": "14904",
+    "6": "14905"
+  },
+  "feature_map": {
+    "1": "User Account",
+    "2": "Betslip",
+    "3": "Quick Bet",
+    "4": "Bet History/Open Bets",
+    "5": "Cash Out",
+    "6": "Navigation",
+    "7": "Sports",
+    "8": "Races",
+    "9": "In-Play",
+    "10": "Streaming",
+    "11": "Build Your Bet",
+    "12": "Lotto",
+    "13": "Virtual Sports",
+    "14": "Retail",
+    "15": "Featured",
+    "16": "Promotions/Banners/Offers",
+    "17": "Other"
+  },
+  "lead_sign_off": {
+    "1": "14817",
+    "2": "14818",
+    "None": "-1"
+  },
+  "hard_ware_dependent": {
+    "1": "14815",
+    "0": "14816",
+    "None": "-1"
+  },
+  "assigned_squad_team": {
+    "1": "14813",
+    "0": "14814",
+    "-1": "-1"
+  }
+}
