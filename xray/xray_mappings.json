@@ -61,31 +61,23 @@
     "13": "14908",
     "0": "-1"
   },
-  "omnia_squads": {
-    "1": "Marvels",
-    "3": "Spartans",
-    "2": "Mavericks",
-    "4": "Falcons",
-    "5": "Guardians",
-    "6": "Core Cobras",
-    "7": "Wolfpack (old cell)",
-    "8": "Regression Squad"
+
+  "gbs_squad_map":{
+    "1":"10830",
+    "2":"10828",
+    "3":"12115",
+    "None":"-1"
   },
-  "assigned_squad_team_map": {
-    "10832": "OMNIA>Retail Core Cobra",
-    "10833": "OMNIA>Retail Falcons",
-    "10835": "OMNIA>Retail Guardians",
-    "10837": "OMNIA>Retail Marvels",
-    "10839": "OMNIA>Retail Mavericks",
-    "10841": "OMNIA>Retail Spartans",
-    "12113": "UKQA>Envision",
-    "12115": "UKQA>GBS",
-    "12117": "UKQA>Load Testing",
-    "12119": "UKQA>Omnia",
-    "12121": "UKQA>Retail Automation",
-    "12208": "UKQA>Retail CP",
-    "12123": "UKQA>Sportbook Automation",
-    "12125": "UKQA>Sportsbook Regression"
+  "omnia_squad_map": {
+    "1": "10837",
+    "2":"10839",
+    "3":"10841",
+    "4":"10833",
+    "5":"10835",
+    "6":"10832",
+    "7":"-1",
+    "8":"12119",
+    "None":"-1"
   },
   "xr_test_level": {
     "-1": "None",
@@ -120,10 +112,5 @@
     "1": "14815",
     "0": "14816",
     "None": "-1"
-  },
-  "assigned_squad_team": {
-    "1": "14813",
-    "0": "14814",
-    "-1": "-1"
   }
 }

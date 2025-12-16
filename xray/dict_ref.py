@@ -80,16 +80,28 @@ omnia_squads = {
     7: "Wolfpack (old cell)",
     8: "Regression Squad"
     }
+gbs_squad = {
+    1: "E Nerds",
+    2: "Dream Team",
+    3: "Acceptance Team"
+}
+
 assigned_squad_team_map = {
-    10832: "OMNIA>Retail Core Cobra",
-    10833: "OMNIA>Retail Falcons",
-    10835: "OMNIA>Retail Guardians",
-    10837: "OMNIA>Retail Marvels",
-    10839: "OMNIA>Retail Mavericks",
-    10841: "OMNIA>Retail Spartans",
+    10832: "OMNIA>Retail Core Cobra", # Core Cobras
+    10833: "OMNIA>Retail Falcons", # Falcons
+    10835: "OMNIA>Retail Guardians", # Guardians
+    10837: "OMNIA>Retail Marvels", #"Marvels",
+    10839: "OMNIA>Retail Mavericks", # Mavericks
+    10841: "OMNIA>Retail Spartans", # Spartans
+
+    10824: "RGE&gt;Envision-Agni",
+    10826: "RGE&gt;Envision-Prithvi",
+    10828: "RGE&gt;GBS-DreamTeam", # Dream Team
+    10830: "RGE&gt;GBS-E.Nerds", # E Nerds
+    12212: "RGE&gt;UK Retail Product Design",
 
     12113: "UKQA>Envision",
-    12115: "UKQA>GBS",
+    12115: "UKQA>GBS", #"Acceptance Team"
     12117: "UKQA>Load Testing",
     12119: "UKQA>Omnia",
     12121: "UKQA>Retail Automation",
@@ -97,3 +109,20 @@ assigned_squad_team_map = {
     12123: "UKQA>Sportbook Automation",
     12125: "UKQA>Sportsbook Regression"
     }
+
+# Legacy payload structure - kept for tracking
+# {
+#     'step': step_content,
+#     'data': "None",
+#     'result': expected_result,
+#     'attachments': [{
+#         'data': base64_encoded_data,
+#         'filename': file_name,
+#         'contentType': content_type
+#     }]
+# }# Keep attachment payload for tracking
+#                         attachment_payload = {'attachments': [{
+#                             'data': encoded_data,
+#                             'filename': file_name,
+#                             "contentType": "plain/text" #'data:image/png:base64'
+#                         }]}

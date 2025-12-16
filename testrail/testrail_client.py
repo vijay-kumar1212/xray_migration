@@ -12,14 +12,17 @@ class TestRailClient:
                  mile_stone_id = 1026,
                  user = None,   # vijaykumar.panga@ivycomptech.com   Vijay123
                  password = None):
+        self.session = requests.Session()
+        # self.session.verify = False
         self.project_id = project_id
         self.suite_id = suite_id
         self.milestone_id = mile_stone_id
         (self.user,self.password) = (user, password) if user and password else ("vijaykumar.panga@ivycomptech.com", "Vijay123")
     #     if we don't have user and password then need to raise an error here
+        self.base_url = base_url
         if not base_url.endswith('/'):
-            base_url += '/'
-        self.url = base_url + "index.php?/api/v2"
+            self.base_url = base_url + '/'
+        self.url = self.base_url + "index.php?/api/v2"
         creds = f'{self.user}:{self.password}'
         creds = creds.encode('utf-8')
         self.auth = base64.b64encode(creds).decode('utf-8')
@@ -27,7 +30,49 @@ class TestRailClient:
             'Authorization': f'Basic {self.auth}',
             'Content-Type': 'application/json'
         }
+        # self.session.headers.update(self.headers)
+        self.login()
 
+    def login(self):
+        login_url = f"{self.base_url}index.php?/auth/login"
+
+        payload = {
+            "name": self.user,
+            "password": self.password,
+            "rememberme": 1
+        }
+
+        response = self.session.post(login_url, data=payload)
+        response.raise_for_status()
+
+        if "auth/login" in response.url:
+            raise Exception("TestRail login failed")
+
+    def get_attachment(self, attachment_id):
+        if not attachment_id:
+            return None, None
+
+        url = f"{self.base_url}index.php?/attachments/get/{attachment_id}"
+
+        response = self.session.get(url, stream=True)
+        response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type", "")
+
+        # 🚨 Detect auth failure
+        if "text/html" in content_type.lower():
+            raise Exception(
+                f"HTML returned instead of attachment for ID {attachment_id}. "
+                "Authentication/session issue."
+            )
+
+        # Extract filename
+        filename = f"{attachment_id}"
+        cd = response.headers.get("Content-Disposition", "")
+        if "filename=" in cd:
+            filename = cd.split("filename*")[-1].strip('"')
+
+        return response.content, filename
 
     def get_testrail_username_password(self):
         return self.user, self.password
@@ -36,7 +81,7 @@ class TestRailClient:
         return requests.get(url='%s/get_case_fields'%(self.url), headers=self.headers).json()
 
     def get_case(self, case_id):
-        return requests.get(url='%s/get_case/%s'%(self.url, case_id), headers=self.headers)
+        return self.session.get(url='%s/get_case/%s'%(self.url, case_id), headers=self.headers)
 
     def get_cases(self, project_id, suite_id, section_id=None, offset=0,test_name=None):
         project_id = project_id if project_id else self.project_id
@@ -210,18 +255,7 @@ class TestRailClient:
         return all_tests
 
 
-    def get_attachment(self,attachment_id):
-        """
-        :param attachment_id: The ID of the attachment
-        :return: an existing attachment
-        """
-        a_headers = {'Authorization': 'Basic %s' % self.auth,
-                     'Accept': "*/*"}
-        if not attachment_id:
-            return None
-        url_ = f"https://ladbrokescoral.testrail.com/index.php?/attachments/get/{attachment_id}"
-        response = requests.get(url=url_, headers=a_headers)
-        return response.content
+
 
     # def get_results_for_case(self, case_id):
     #     return requests.get(f'get_results_for_case/{case_id}')
