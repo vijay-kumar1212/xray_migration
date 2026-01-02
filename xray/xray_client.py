@@ -14,7 +14,7 @@ class XrayClient:
     #https://jira-enterprise.corp.entaingroup.com
     def __init__(self,
                  base_url='https://jira-enterprise-uat.corp.entaingroup.com/',
-                 project_key='RGE', # DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
+                 project_key='DF', # DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
                  test_repo_ = '/LCG Digital Master Suite', #  modify the Test Repository Path based on the project
                  test_set_id=None,
@@ -106,3 +106,37 @@ class XrayClient:
                 return {"error": f"Invalid JSON response: {response.text}"}
         else:
             return {"error": f"HTTP {response.status_code}: {response.text}"}
+
+    def get_test_case(self, key):
+        url = f'{self.url}/rest/raven/1.0/api/test?keys={key}'
+        response = requests.get(url=url, headers=self.headers, verify=False)
+        return response
+
+    def get_field_options(self):
+        url = self.url + '/rest/api/3/issue/{DF-2292}'
+        response = requests.get(url=url, headers=self.headers, verify=False)
+        fields = response.json()
+
+    def upload_jira_attachment(self, issue_key, file_bytes, file_name):
+        url = f"{self.url}rest/api/2/issue/{issue_key}/attachments"
+        files = {
+            "file": (file_name, file_bytes)
+        }
+        
+        # Create headers without Content-Type and Accept for file upload
+        upload_headers = {
+            'Authorization': self.headers['Authorization'],
+            'X-Atlassian-Token': 'no-check'
+        }
+
+        response = requests.post(
+            url,
+            headers=upload_headers,
+            files=files,
+            verify=False,
+            allow_redirects=False
+        )
+
+        if response.status_code not in [200, 201]:
+            raise Exception(f"Upload failed {response.status_code}: {response.text}")
+        return response.json()[0]  # attachment metadata

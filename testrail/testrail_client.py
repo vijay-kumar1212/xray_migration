@@ -30,7 +30,6 @@ class TestRailClient:
             'Authorization': f'Basic {self.auth}',
             'Content-Type': 'application/json'
         }
-        # self.session.headers.update(self.headers)
         self.login()
 
     def login(self):
