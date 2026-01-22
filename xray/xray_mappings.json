@@ -4,49 +4,51 @@
     "3": "2",
     "2": "3",
     "1": "4",
-    "5": "Lowest",
+    "5": "5",
     "10000": "Urgent",
-    "10001": "Unprioritised"
+    "None": "10001"
   },
   "dfe_automation_status": {
     "3": "13500",
     "1": "13501",
-    "Automation In Progress": "13502",
     "2": "13503",
-    "Maintenance": "13504",
-    "No Automation Required": "13505",
-    "4": "13500"
+    "None": "-1"
   },
   "df_automation_status": {
     "1": "13501",
     "2": "13503",
-    "3": "13500"
+    "3": "13500",
+    "None": "-1"
   },
   "dbt_automation_status": {
     "1": "13503",
-    "2": "13501"
+    "2": "13501",
+    "None": "-1"
   },
   "omnia_automation_status": {
     "1": "New",
-    "2": "Automation Candidate",
+    "2": "13501",
     "3": "13503",
     "4": "13500",
-    "5": "PR raised yet to merge",
-    "6": "Automated but descoped/deprecated"
+    "5": "13502",
+    "6": "13504",
+    "None": "-1"
   },
   "rge_automation_status": {
     "1": "13503",
     "2": "13501",
     "3": "13500",
-    "4": "Automation Candidate",
-    "5": "Automated but descoped/deprecated"
+    "4": "13501",
+    "5": "13504",
+    "None": "-1"
   },
   "ukqa_automation_status": {
-    "1": "13501",
-    "2": "Automation Candidate",
+    "1": "New",
+    "2": "13501",
     "3": "13503",
     "4": "13500",
-    "5": "Automated but descoped/deprecated"
+    "5": "13504",
+    "None": "-1"
   },
   "custom_brand": {
     "1": "Coral Only",
@@ -56,9 +58,9 @@
     "5": "All Brands"
   },
   "xr_devices": {
-    "3": "14906",
-    "1": "14907",
-    "13": "14908",
+    "3": "15514",
+    "1": "15515",
+    "13": "15516",
     "0": "-1"
   },
 
@@ -81,8 +83,8 @@
   },
   "xr_test_level": {
     "-1": "None",
-    "1": "14904",
-    "6": "14905"
+    "1": "15512",
+    "6": "15513"
   },
   "feature_map": {
     "1": "User Account",
@@ -104,13 +106,13 @@
     "17": "Other"
   },
   "lead_sign_off": {
-    "1": "14817",
-    "2": "14818",
+    "1": "15702",
+    "2": "15703",
     "None": "-1"
   },
   "hard_ware_dependent": {
-    "1": "14815",
-    "0": "14816",
+    "1": "15700",
+    "2": "15701",
     "None": "-1"
   }
 }

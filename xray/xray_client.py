@@ -11,12 +11,12 @@ load_dotenv()
 
 
 class XrayClient:
-    #https://jira-enterprise.corp.entaingroup.com
+    #https://jira-enterprise-uat.corp.entaingroup.com
     def __init__(self,
-                 base_url='https://jira-enterprise-uat.corp.entaingroup.com/',
-                 project_key='DF', # DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
+                 base_url='https://jira-enterprise.corp.entaingroup.com/',
+                 project_key='RGE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = '/LCG Digital Master Suite', #  modify the Test Repository Path based on the project
+                 test_repo_ = '/LCG Digital Master Suite', #TODO  modify the Test Repository Path based on the project
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -52,7 +52,14 @@ class XrayClient:
         if not html_text:
             return html_text
         soup = BeautifulSoup(html_text, "html.parser")
-        return soup.get_text(strip=True)
+        # return soup.get_text(strip=True)
+        text = soup.get_text(separator='\n')
+
+    #   to remove excessive blank lines
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = '\n'.join(chunk for chunk in chunks if chunk)
+        return text
 
     def create_issue(self, data, issue_type=None,test_repo=None):
         payload = {
@@ -69,20 +76,20 @@ class XrayClient:
         elif issue_type == self.issue_type:
             payload['fields']["description"] = self.strip_html(data['custom_description']) if data['custom_description'] else '' #Description
             payload['fields']["customfield_10270"] = test_repo if test_repo else self.test_repository # Test Repository Path
-            payload['fields']["customfield_11426"] =  {"id": self.mappings[f'{self.project_key.lower()}_automation_status'][str(data['custom_automatedd'])] if self.project_key not in ['UKQA', 'RGE', 'OMNIA'] else self.mappings[f'{self.project_key.lower()}_automation_status'][str(data['custom_autotype'])]} # Test Automation status TODO
-            payload['fields']['customfield_12901'] = self.strip_html(data['custom_preconds']) #Pre conditions
-            payload['fields']['customfield_12903'] = f'S{data['suite_id']}' #Test Suit ID
-            payload['fields']['customfield_12906'] = f'C{data['id']}' # Test rail Id
-            payload['fields']['customfield_12905'] = data['refs'] #References
-            payload['fields']['customfield_12902'] = {'id': self.mappings['xr_test_level']['1'] if data['type_id'] == 1 else self.mappings['xr_test_level']['6']} # Test Level Acceptance/Functional
+            payload['fields']["customfield_11426"] =  {"id": self.mappings[f'{self.project_key.lower()}_automation_status'][str(data['custom_automatedd'])] if self.project_key not in ['UKQA', 'RGE', 'OMNIA'] else self.mappings[f'{self.project_key.lower()}_automation_status'][str(data.get('custom_autotype'))]} # Test Automation status TODO
+            payload['fields']['customfield_13006'] = self.strip_html(data['custom_preconds']) #Preconditions Previous id 12901
+            payload['fields']['customfield_13001'] = f'S{data['suite_id']}' #Test Suit ID 12903
+            payload['fields']['customfield_13004'] = f'C{data['id']}' # Test rail Id 12906
+            payload['fields']['customfield_13003'] = data['refs'] #References 12905
+            payload['fields']['customfield_13000'] = {'id': self.mappings['xr_test_level']['1'] if data['type_id'] == 1 else self.mappings['xr_test_level']['6']} # Test Level Acceptance/Functional 12902
             if self.project_key in ['DFE', 'DF']:
                 payload['fields']['labels'] = [self.mappings['custom_brand'][str(data['custom_brand'])].replace(" ", "_")]
-                payload['fields']['customfield_12907'] = {'id': self.get_custom_device(data['custom_device'])}  # Device
-                payload['fields']['customfield_12904'] = self.mappings['feature_map'][str(data['custom_feature'])]  # Feature dictionary
+                payload['fields']['customfield_13005'] = {'id': self.get_custom_device(data['custom_device'])}  # Device 12907
+                payload['fields']['customfield_13002'] = self.mappings['feature_map'][str(data['custom_feature'])]  # Feature dictionary 12904
             if self.project_key in ['OMNIA', 'RGE', 'UKQA']:
-                payload['fields']['customfield_13001'] = {'id': self.mappings['lead_sign_off'][str(data['custom_omnialeadreview'])]} #lead sign off
-                payload['fields']['customfield_13000'] = {'id': self.mappings['hard_ware_dependent'][str(data.get('custom_hardwaredependent', None))]} #hard_ware_dependent NA for ukqa
-                payload['fields']['customfield_10292'] = {'id' : self.mappings['omnia_squad_map'][str(data['custom_squad_name'])] if self.project_key == 'OMNIA' else self.mappings['gbs_squad_map'][str(data.get('custom_case_gbs_squad', None))]} #assigned_squad_team Need details from specific teams on mapping squad names between Tr to xray GBS doesn't have team names in xray
+                payload['fields']['customfield_13101'] = {'id': self.mappings['lead_sign_off'][str(data['custom_omnialeadreview'])]} #lead sign off
+                payload['fields']['customfield_13100'] = {'id': self.mappings['hard_ware_dependent'][str(data.get('custom_hardwaredependent', None))]} #hard_ware_dependent NA for ukqa
+                payload['fields']['customfield_10292'] = {'id' : self.mappings['omnia_squad_map'][str(data['custom_squad_name'])] if self.project_key == 'OMNIA' else self.mappings['gbs_squad_map'][str(data.get('custom_case_gbs_squad', None))]}
         response = post(url='{host_name}rest/api/2/issue'.format(host_name=self.url), headers=self.headers,
                     json=payload, verify=False,allow_redirects=False)
         if response.status_code != 201:

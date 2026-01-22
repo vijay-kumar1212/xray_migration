@@ -3,7 +3,7 @@ xray_priority = {
         3: '2',  # High P2
         2: '3',  # Medium P3
         1: '4',  # Low P4
-        5: 'Lowest',
+        5: '5',
         10000 : 'Urgent',
         10001: 'Unprioritised'
     }
@@ -19,8 +19,7 @@ automation_status = {
 
         'Maintenance': 13504,
 
-        'No Automation Required': 13505,
-        4: '13500'
+        'No Automation Required': 13505
     }
 df_automation_type = {
     1: '13501', # Manual
@@ -109,7 +108,16 @@ assigned_squad_team_map = {
     12123: "UKQA>Sportbook Automation",
     12125: "UKQA>Sportsbook Regression"
     }
-
+lead_sign_off: {
+    "1": "14817",
+    "2": "14818",
+    "None": "-1"
+}
+hard_ware_dependent: {
+    "1": "14815",
+    "2": "14816",
+    "None": "-1"
+}
 # Legacy payload structure - kept for tracking
 # {
 #     'step': step_content,
