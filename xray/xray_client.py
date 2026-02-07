@@ -1,7 +1,9 @@
+import base64
 import json
+import mimetypes
 import os
+import re
 from pathlib import Path
-
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import requests
@@ -14,9 +16,9 @@ class XrayClient:
     #https://jira-enterprise-uat.corp.entaingroup.com
     def __init__(self,
                  base_url='https://jira-enterprise.corp.entaingroup.com/',
-                 project_key='RGE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
+                 project_key='DFE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = '/LCG Digital Master Suite', #TODO  modify the Test Repository Path based on the project
+                 test_repo_ = '/Voltron Sanity Automation', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -95,6 +97,54 @@ class XrayClient:
         if response.status_code != 201:
             raise Exception(f"API Error {response.status_code}: {response.text}")
         return response.json()
+
+    def add_steps_to_the_test_case(self, key, steps, testrail_client=None):
+        session = requests.Session()
+        session.headers.update(self.headers)
+        session.verify = False
+        url = f"{self.url}rest/raven/1.0/api/test/{key}/step/"
+        for step in steps:
+            step_payload = {
+                'step': self.strip_html(step.get('content', '')),
+                'data': "None",
+                'result': self.strip_html(step.get('expected', '')),
+                'attachments': []  # Keep for tracking
+            }
+            xray_step = session.put(url=url, json=step_payload)
+            if xray_step.status_code == 200:
+                self.__class__.step_id = xray_step.json()['id']
+            else:
+                raise requests.HTTPError(f"step creation is failed for {key}: {xray_step.text}")
+            # Process attachments if present in content or expected
+            content = step.get('content', '')
+            expected = step.get('expected', '')
+            if "index.php?/attachments/get/" in content or "index.php?/attachments/get/" in expected:
+                attachment_ids = re.findall(r'index\.php\?/attachments/get/([\w-]+)', content + expected)
+                for attachment_id in attachment_ids:
+                    try:
+                        attachment_data,file_name = testrail_client.get_attachment(attachment_id=attachment_id)
+                        encoded_data = base64.b64encode(attachment_data).decode("utf-8")
+                        file_name = f'{file_name}.png'
+                        mime_type, _ = mimetypes.guess_type(file_name)
+                        mime_type = mime_type or "application/octet-stream"
+                        payload = {
+                            "attachments": {
+                                "add": [
+                                    {
+                                        "data": encoded_data,
+                                        "filename": file_name,
+                                        "contentType": mime_type
+                                    }
+                                ]
+                            }
+                        }
+
+                        # Upload attachment
+                        attachment_url = f"{self.url}rest/raven/1.0/api/test/{key}/step/{self.__class__.step_id}"
+                        session.post(url=attachment_url,  json=payload)
+                    except Exception as e:
+                        print(f"Attachment processing failed for ID {attachment_id}: {e}")
+
 
     def update_case_to_repo(self, case_id, test_repo):
         payload = {

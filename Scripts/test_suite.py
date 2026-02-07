@@ -1,3 +1,4 @@
+import re
 import sys
 import os
 import pandas as pd
@@ -9,7 +10,7 @@ from xray.xray_client import XrayClient
 
 class TestSuiteExport(TestRailClient):
 
-    def export_test_suite_to_xray(self,project_id=36,suite_id=637):
+    def export_test_suite_to_xray(self,project_id=36,suite_id=89319):
         sections = self.get_all_sections_data(project_id, suite_id)
         xray = XrayClient()
         folder_paths = self.build_folder_paths(sections)
@@ -19,7 +20,7 @@ class TestSuiteExport(TestRailClient):
         processed_count = 0
         
         for section in sections:
-            test_repository = f"/LCG Digital Master Suite/{folder_paths[section['id']]}"
+            test_repository = f"/Voltron Sanity Automation/{folder_paths[section['id']]}"  #TODO
             test_cases = self.get_section_cases(suite_id=suite_id, section_id=section['id']).get('cases')
             for case in test_cases:
                 try:
@@ -27,9 +28,17 @@ class TestSuiteExport(TestRailClient):
                     tr_case_data = self.get_case(case_id=case['id']).json()
                     
                     export_status = "Success" if x_case and 'key' in x_case else "Failed"
-                    
+                    # Preconditions attachments
+                    preconditions = tr_case_data.get('custom_preconds')
+                    if preconditions and "index.php?/attachments/get/" in preconditions:
+                        attachment_ids = list(set(re.findall(r'index\.php\?/attachments/get/([\w-]+)', preconditions)))
+                        for attachment_id in attachment_ids:
+                            attachment_data, file_name = self.get_attachment(attachment_id)
+                            xray.upload_jira_attachment(issue_key=case['key'],
+                                                        file_name=f'prerequisite_{file_name}.png',
+                                                        file_bytes=attachment_data)
                     try:
-                        add_steps = xray.add_steps_to_the_test_case(x_case['key'], steps=tr_case_data['custom_steps_separated'])
+                        add_steps = xray.add_steps_to_the_test_case(x_case['key'], steps=tr_case_data['custom_steps_separated'],testrail_client=self)
                         steps_status = "Success" if add_steps else "Failed"
                     except Exception as e:
                         steps_status = f"Failed: {str(e)}"
