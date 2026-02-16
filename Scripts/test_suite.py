@@ -10,7 +10,7 @@ from xray.xray_client import XrayClient
 
 class TestSuiteExport(TestRailClient):
 
-    def export_test_suite_to_xray(self,project_id=36,suite_id=89319):
+    def export_test_suite_to_xray(self,project_id=36,suite_id=43740):
         sections = self.get_all_sections_data(project_id, suite_id)
         xray = XrayClient()
         folder_paths = self.build_folder_paths(sections)
