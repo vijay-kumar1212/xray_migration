@@ -3,3 +3,156 @@ we have a lot of pre built packages, and rapid prototype(working project)
 google colab we can code here as well
 what is dynamically typed programme?
 python automatically determines data types at run time, that's why it's called as dynamic data type
+
+
+Why PAT is better for high-volume requests:
+
+Performance: PAT uses Bearer token authentication - simpler, faster, no base64 encoding overhead
+Rate Limits: Self-hosted Jira typically has more generous rate limits than Cloud
+Simpler: One token vs email+token combination
+Less overhead: Direct Bearer auth vs Basic auth encoding
+Optimized XrayAPIClient for High-Volume Requests
+
+A Personal Access Token is:
+
+A long-lived token tied to a specific user account
+
+Used mainly for REST API authentication
+
+Acts like a password replacement
+
+Can have scoped permissions (read, write, admin etc.)
+
+Characteristics:
+
+User-based authentication
+
+Usually configurable expiration
+
+Can be revoked anytime
+
+Good for automation scripts, CI/CD, integrations
+
+2️⃣ API Token
+
+An API token is a generic term. Its meaning depends on the system.
+
+In tools like:
+
+Jira
+
+Xray
+
+An API token is:
+
+A token generated from your account (like Atlassian API token)
+
+Used instead of password for basic auth
+
+Often paired with email + token
+
+Example (Atlassian Cloud):
+
+auth = (email, api_token)
+
+
+So in many systems:
+👉 PAT = API Token
+👉 Sometimes they are just named differently.
+
+🔹 Key Technical Differences (General View)
+Feature	PAT	API Token
+Tied to user	Yes	Usually yes
+Scope control	Often granular	Sometimes limited
+Expiry control	Usually configurable	Depends on platform
+Recommended over password	✅ Yes	✅ Yes
+Designed for automation	Yes	Yes
+🔹 Which Is Recommended for Large Regression Runs?
+
+When you're:
+
+Updating thousands of test executions
+
+Running CI/CD regression pipelines
+
+Parallel automation jobs
+
+Hitting APIs heavily
+
+✅ Recommended: PAT (or OAuth2 Client Credentials if available)
+
+Why?
+
+1️⃣ Better Security
+
+No password exposure
+
+Can be revoked without affecting user login
+
+2️⃣ Better for Automation
+
+Designed specifically for script/API usage
+
+Cleaner for headless systems
+
+3️⃣ Stability Under Load
+
+Tokens are stateless
+
+No session-based authentication
+
+Works better in parallel executions
+
+🔥 Even Better for High Volume: OAuth2 (Client Credentials Flow)
+
+If you're using Xray Cloud:
+
+Instead of:
+
+email + API token
+
+
+Use:
+
+client_id + client_secret → get JWT access token
+
+
+This is:
+
+More scalable
+
+More production-grade
+
+Better for CI/CD
+
+Recommended by Xray for API-heavy integrations
+
+🔹 For Your Regression Use Case
+
+Since you're doing automation (Selenium + API testing):
+
+If using Jira Cloud:
+
+➡ Use API Token
+
+If using Xray Cloud REST API:
+
+➡ Use OAuth2 client credentials flow
+(Not PAT)
+
+If using Jira Data Center:
+
+➡ Use PAT
+
+🚀 Final Recommendation (For Large Volume Regression Updates)
+
+If you are updating test case status in bulk:
+
+Use token-based auth (NOT password)
+
+Use connection pooling (requests.Session())
+
+Implement retry logic (429, 5xx handling)
+
+Use batching (don’t update one-by-one if API supports bulk)
+

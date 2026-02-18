@@ -1,10 +1,12 @@
 import base64
 import requests
 
+from utilities.log_mngr import setup_custom_logger
+
 all_section_data = []
 
 class TestRailClient:
-
+    _logger = setup_custom_logger()
     def __init__(self,
                  base_url="https://ladbrokescoral.testrail.com/",
                  project_id = 36,

@@ -9,16 +9,20 @@ from dotenv import load_dotenv
 import requests
 from requests import post
 
+from utilities.log_mngr import setup_custom_logger
+from utilities.requests_wrapper import do_request
+
 load_dotenv()
 
 
 class XrayClient:
+    _logger = setup_custom_logger()
     #https://jira-enterprise-uat.corp.entaingroup.com
     def __init__(self,
                  base_url='https://jira-enterprise.corp.entaingroup.com/',
                  project_key='DFE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = '/Voltron Sanity Automation', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
+                 test_repo_ = '/AutomationSanityPack', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -64,12 +68,13 @@ class XrayClient:
         return text
 
     def create_issue(self, data, issue_type=None,test_repo=None):
+        self._logger.info(f"Creating issue: type={issue_type or self.issue_type}, project={self.project_key}")
         payload = {
             "fields": {
                 "project": {"key": self.project_key},
                 "summary": data['title'] if issue_type==self.issue_type else data['name'],
                 "issuetype": {"name": issue_type if issue_type is not None else self.issue_type},
-                "priority": {"id": str(data['custom_priorityomnia']) if self.project_key == 'OMNIA' else self.mappings['xray_priority'][str(data['priority_id'])]}
+                "priority": {"id": self.mappings['xray_priority'][str(data['custom_priorityomnia'])] if self.project_key == 'OMNIA' else self.mappings['xray_priority'][str(data['priority_id'])]}
             }
         }
         if issue_type == 'Test Execution' and data['description']:
@@ -92,34 +97,36 @@ class XrayClient:
                 payload['fields']['customfield_13101'] = {'id': self.mappings['lead_sign_off'][str(data['custom_omnialeadreview'])]} #lead sign off
                 payload['fields']['customfield_13100'] = {'id': self.mappings['hard_ware_dependent'][str(data.get('custom_hardwaredependent', None))]} #hard_ware_dependent NA for ukqa
                 payload['fields']['customfield_10292'] = {'id' : self.mappings['omnia_squad_map'][str(data['custom_squad_name'])] if self.project_key == 'OMNIA' else self.mappings['gbs_squad_map'][str(data.get('custom_case_gbs_squad', None))]}
-        response = post(url='{host_name}rest/api/2/issue'.format(host_name=self.url), headers=self.headers,
-                    json=payload, verify=False,allow_redirects=False)
-        if response.status_code != 201:
-            raise Exception(f"API Error {response.status_code}: {response.text}")
-        return response.json()
+        self._logger.debug(f"Payload prepared for issue creation: {json.dumps(payload, indent=2)}")
+        response = do_request(url='{host_name}rest/api/2/issue'.format(host_name=self.url), method='POST',json_=payload, headers=self.headers, allow_redirects=False)
+        self._logger.info(f"Issue created successfully: {response.get('key', 'N/A')}")
+        return response
 
     def add_steps_to_the_test_case(self, key, steps, testrail_client=None):
-        session = requests.Session()
-        session.headers.update(self.headers)
-        session.verify = False
+        self._logger.info(f"Adding {len(steps)} steps to test case: {key}")
         url = f"{self.url}rest/raven/1.0/api/test/{key}/step/"
         for step in steps:
             step_payload = {
                 'step': self.strip_html(step.get('content', '')),
                 'data': "None",
                 'result': self.strip_html(step.get('expected', '')),
-                'attachments': []  # Keep for tracking
+                'attachments': []
             }
-            xray_step = session.put(url=url, json=step_payload)
-            if xray_step.status_code == 200:
-                self.__class__.step_id = xray_step.json()['id']
-            else:
-                raise requests.HTTPError(f"step creation is failed for {key}: {xray_step.text}")
+            if step_payload['step'] == "" and step_payload['result'] == "":
+                continue
+            elif step_payload['step'] == "":
+                step_payload['step'] = " * "
+            
+            xray_step = do_request(url=url, method='PUT', json_=step_payload, headers=self.headers)
+            self.__class__.step_id = xray_step['id']
+            self._logger.debug(f"Step created successfully: step_id={self.__class__.step_id}")
+            
             # Process attachments if present in content or expected
             content = step.get('content', '')
             expected = step.get('expected', '')
             if "index.php?/attachments/get/" in content or "index.php?/attachments/get/" in expected:
                 attachment_ids = re.findall(r'index\.php\?/attachments/get/([\w-]+)', content + expected)
+                self._logger.debug(f"Found {len(attachment_ids)} attachments for step {self.__class__.step_id}")
                 for attachment_id in attachment_ids:
                     try:
                         attachment_data,file_name = testrail_client.get_attachment(attachment_id=attachment_id)
@@ -138,12 +145,11 @@ class XrayClient:
                                 ]
                             }
                         }
-
-                        # Upload attachment
                         attachment_url = f"{self.url}rest/raven/1.0/api/test/{key}/step/{self.__class__.step_id}"
-                        session.post(url=attachment_url,  json=payload)
+                        do_request(url=attachment_url, method='POST', json_=payload, headers=self.headers)
+                        self._logger.debug(f"Attachment uploaded: {file_name}")
                     except Exception as e:
-                        print(f"Attachment processing failed for ID {attachment_id}: {e}")
+                        self._logger.error(f"Attachment processing failed for ID {attachment_id}: {e}")
 
 
     def update_case_to_repo(self, case_id, test_repo):
