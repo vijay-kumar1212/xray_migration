@@ -60,14 +60,11 @@ class TestRailClient:
 
         content_type = response.headers.get("Content-Type", "")
 
-        # 🚨 Detect auth failure
         if "text/html" in content_type.lower():
-            raise Exception(
-                f"HTML returned instead of attachment for ID {attachment_id}. "
-                "Authentication/session issue."
-            )
+            self.login()
+            response = self.session.get(url, stream=True)
+            response.raise_for_status()
 
-        # Extract filename
         filename = f"{attachment_id}"
         cd = response.headers.get("Content-Disposition", "")
         if "filename=" in cd:
