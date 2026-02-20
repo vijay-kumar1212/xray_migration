@@ -7,7 +7,6 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import requests
-from requests import post
 
 from utilities.log_mngr import setup_custom_logger
 from utilities.requests_wrapper import do_request
@@ -22,7 +21,7 @@ class XrayClient:
                  base_url='https://jira-enterprise.corp.entaingroup.com/',
                  project_key='DFE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = '/AutomationSanityPack', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
+                 test_repo_ = 'LCG Sportsbook Master TestSuite', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -102,6 +101,14 @@ class XrayClient:
         self._logger.info(f"Issue created successfully: {response.get('key', 'N/A')}")
         return response
 
+    def create_test_plan_or_execution(self,test_plan_name,data):
+        # payload = {"fields": {
+        #         "project": {"key": self.project_key},
+        #         "summary": test_plan_name,
+        #         "issuetype": {"name": 'Test Plan'},
+        #         "description": data['description'],
+        #     }
+        return True
     def add_steps_to_the_test_case(self, key, steps, testrail_client=None):
         self._logger.info(f"Adding {len(steps)} steps to test case: {key}")
         url = f"{self.url}rest/raven/1.0/api/test/{key}/step/"
@@ -118,6 +125,9 @@ class XrayClient:
                 step_payload['step'] = " * "
             
             xray_step = do_request(url=url, method='PUT', json_=step_payload, headers=self.headers)
+            if not xray_step or 'id' not in xray_step:
+                self._logger.error(f"Failed to create step for test case {key}")
+                return False
             self.__class__.step_id = xray_step['id']
             self._logger.debug(f"Step created successfully: step_id={self.__class__.step_id}")
             
@@ -130,6 +140,9 @@ class XrayClient:
                 for attachment_id in attachment_ids:
                     try:
                         attachment_data,file_name = testrail_client.get_attachment(attachment_id=attachment_id)
+                        if not attachment_data:
+                            self._logger.warning(f"Skipping attachment {attachment_id} - no data returned")
+                            continue
                         encoded_data = base64.b64encode(attachment_data).decode("utf-8")
                         file_name = f'{file_name}.png'
                         mime_type, _ = mimetypes.guess_type(file_name)
@@ -149,7 +162,8 @@ class XrayClient:
                         do_request(url=attachment_url, method='POST', json_=payload, headers=self.headers)
                         self._logger.debug(f"Attachment uploaded: {file_name}")
                     except Exception as e:
-                        self._logger.error(f"Attachment processing failed for ID {attachment_id}: {e}")
+                        self._logger.warning(f"Skipping attachment {attachment_id} for Test Case {key}: {str(e)}")
+        return True
 
 
     def update_case_to_repo(self, case_id, test_repo):

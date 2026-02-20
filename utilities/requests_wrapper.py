@@ -46,7 +46,8 @@ def do_request(url, method = "GET", headers = None, data=None, json_ = None, pro
             error = result['error'] if isinstance(result, dict) else result
         else:
             error = "No additional error message is received"
-        raise MigrationAPIError('API Returned HTTP %s (%s)' %(e, error))
+        _logger.error('API Returned HTTP %s (%s)' %(e, error))
+        return {'error': f'API Returned HTTP {e} ({error})'}
     return result
 
 def check_status_code(request_):
