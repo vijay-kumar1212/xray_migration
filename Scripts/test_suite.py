@@ -21,12 +21,16 @@ class TestSuiteExport(TestRailClient):
         xray = XrayClient()
         folder_paths = self.build_folder_paths(sections)
         
-        # Excel tracking data
+        # Create Excel file before loop
+        successfull_cases_file = f"{xray.test_repository}_testrail_to_xray_migration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        failed_cases_file = f"failed_cases_{xray.test_repository}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
         excel_data = []
         failed_cases = []
         processed_count = 0
         total_suite_cases = 0
         imported_cases_to_xray = 0
+        
         for section in sections:
             test_repository = f"/{xray.test_repository}/{folder_paths[section['id']]}"
             test_cases = self.get_section_cases(suite_id=suite_id, section_id=section['id']).get('cases')
@@ -83,7 +87,12 @@ class TestSuiteExport(TestRailClient):
                         'Status of Adding Steps to Xray': steps_status
                     })
                     processed_count += 1
+                    
+                    # Update Excel every 100 cases
                     if processed_count % 100 == 0:
+                        pd.DataFrame(excel_data).to_excel(successfull_cases_file, index=False)
+                        if failed_cases:
+                            pd.DataFrame(failed_cases).to_excel(failed_cases_file, index=False)
                         self._logger.info(f"Progress: Processed {processed_count} test cases")
                         print(f"Processed {processed_count} test cases...")
                 except Exception as e:
@@ -96,20 +105,15 @@ class TestSuiteExport(TestRailClient):
                         'Status of Adding Steps to Xray': "Not Attempted"
                     })
         
-        # Create Excel file
-        df = pd.DataFrame(excel_data)
-        filename = f"{xray.test_repository}_testrail_to_xray_migration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        df.to_excel(filename, index=False)
-        self._logger.info(f"Excel report saved as: {filename} with {len(excel_data)} test cases")
-        print(f"Excel report saved as: {filename} with {len(excel_data)} test cases")
+        # Final Excel update
+        pd.DataFrame(excel_data).to_excel(successfull_cases_file, index=False)
+        self._logger.info(f"Excel report saved as: {successfull_cases_file} with {len(excel_data)} test cases")
+        print(f"Excel report saved as: {successfull_cases_file} with {len(excel_data)} test cases")
 
         if failed_cases:
-            failed_cases_df = pd.DataFrame(failed_cases)
-            failed_cases_file = f"failed_cases_{xray.test_repository}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            failed_cases_df.to_excel(failed_cases_file, index=False)
+            pd.DataFrame(failed_cases).to_excel(failed_cases_file, index=False)
             self._logger.info(f"Failed cases report saved as: {failed_cases_file}")
             print(f"Excel report saved as: {failed_cases_file} with {len(failed_cases)} test cases")
-
 
         return excel_data, failed_cases, total_suite_cases, imported_cases_to_xray
 
