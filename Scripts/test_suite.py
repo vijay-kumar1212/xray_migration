@@ -38,6 +38,8 @@ class TestSuiteExport(TestRailClient):
             total_suite_cases += section_cases
             self._logger.debug(f"Processing section '{section['name']}' with {len(test_cases)} test cases")
             for case in test_cases:
+                x_case = None
+                export_status = "Failed"
                 try:
                     x_case = xray.create_issue(data=case, issue_type='Test',test_repo=test_repository)
                     tr_case_data = self.get_case(case_id=case['id']).json()
@@ -96,7 +98,7 @@ class TestSuiteExport(TestRailClient):
                         self._logger.info(f"Progress: Processed {processed_count} test cases")
                         print(f"Processed {processed_count} test cases...")
                 except Exception as e:
-                    self._logger.error(f"Error processing TestRail case {case['id']}: {str(e)}")
+                    self._logger.error(f"Error processing TestRail case {case['id']}: {str(e)} {x_case['key'] if export_status == 'Success' else ''}")
                     excel_data.append({
                         'Test Rail Id': case['id'],
                         'Test Repository': test_repository,
@@ -154,11 +156,14 @@ class TestSuiteExport(TestRailClient):
             sec = section_map.get(sec_id)
             if not sec:
                 return ""
+            
+            clean_name = sec['name'].replace('\\', '').replace("'", '')
+            
             if sec['parent_id'] is None:
-                path_cache[sec_id] = sec['name']
+                path_cache[sec_id] = clean_name
             else:
                 parent_path = _build_path(sec['parent_id'])
-                path_cache[sec_id] = f"{parent_path}/{sec['name']}"
+                path_cache[sec_id] = f"{parent_path}/{clean_name}"
             return path_cache[sec_id]
 
         # Build paths for all sections

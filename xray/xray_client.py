@@ -1,5 +1,7 @@
 import base64
 import json
+from bs4 import MarkupResemblesLocatorWarning
+import warnings
 import mimetypes
 import os
 import re
@@ -56,6 +58,7 @@ class XrayClient:
     def strip_html(html_text):
         if not html_text:
             return html_text
+        warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
         soup = BeautifulSoup(html_text, "html.parser")
         # return soup.get_text(strip=True)
         text = soup.get_text(separator='\n')
@@ -71,7 +74,7 @@ class XrayClient:
         payload = {
             "fields": {
                 "project": {"key": self.project_key},
-                "summary": data['title'] if issue_type==self.issue_type else data['name'],
+                "summary": data['title'].replace("\r", "").replace("\n", " ") if issue_type==self.issue_type else data['name'],
                 "issuetype": {"name": issue_type if issue_type is not None else self.issue_type},
                 "priority": {"id": self.mappings['xray_priority'][str(data['custom_priorityomnia'])] if self.project_key == 'OMNIA' else self.mappings['xray_priority'][str(data['priority_id'])]}
             }
@@ -217,3 +220,35 @@ class XrayClient:
         if response.status_code not in [200, 201]:
             raise Exception(f"Upload failed {response.status_code}: {response.text}")
         return response.json()[0]  # attachment metadata
+
+    def get_cases_from_section(self, section_id = None, project_key = None, limit = 100, all_descendants = True):
+        """
+        :param section_id:
+        :param project_key:
+        :param page:
+        :param limit:
+        :param all_descendants:
+        :return: a list of test cases for a test suite or specific section in a test suite.
+        """
+        page = 1
+        results = []
+        project_key = self.project_key if project_key is None else project_key
+        while True:
+            url = f'{self.url}rest/raven/1.0/api/testrepository/{project_key}/folders/{section_id}/tests?page={page}&limit={limit}&allDescendants=true'
+            resp = do_request(method='GET', url=url, headers=self.headers)
+            data = resp
+            if not data:
+                break
+            results.extend(data)
+            page += 1
+        return results
+
+
+    def get_all_sections(self, method='GET',  section = None):
+        """
+        :param method:
+        :param section:
+        :return: a list of all sections in a test suite or specific section in a test repository.
+        """
+        return do_request(url=f'{self.url}rest/raven/1.0/api/testrepository/{self.project_key}/folders/{section}/folders',
+                   method=method, headers=self.headers)

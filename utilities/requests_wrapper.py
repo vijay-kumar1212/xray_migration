@@ -18,20 +18,20 @@ def do_request(url, method = "GET", headers = None, data=None, json_ = None, pro
         data = json.dumps(data)
 
     try:
-        r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=40,
+        r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=30,
                     **keywords)
         if not f"{r.status_code}".startswith("2"):
             sleep(10)
-            r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=60,
+            r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=50,
                         **keywords)
     except Exception as e:
         _logger.warning(e)
         sleep(1)
-        r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=60,
+        r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=50,
                     **keywords)
         if not f"{r.status_code}".startswith("2"):
             sleep(10)
-            r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=60,
+            r = request(url=url, method=method, headers=headers, data=data, json=json_, proxies=proxies, verify=False, timeout=50,
                         **keywords)
     e = check_status_code(r)
     if load_response:
