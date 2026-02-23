@@ -50,7 +50,7 @@ class XrayClient:
         if not devices:
             return self.mappings['xr_devices']['0']
         d = devices[0]
-        if d == 2: #  If tablet is present then we are making it to mobile in xray
+        if d in [2, 5, 4]: #  If tablet is present then we are making it to mobile in xray
             return self.mappings['xr_devices']['1']
         return self.mappings['xr_devices'][str(d)]
 
@@ -76,7 +76,7 @@ class XrayClient:
                 "project": {"key": self.project_key},
                 "summary": data['title'].replace("\r", "").replace("\n", " ") if issue_type==self.issue_type else data['name'],
                 "issuetype": {"name": issue_type if issue_type is not None else self.issue_type},
-                "priority": {"id": self.mappings['xray_priority'][str(data['custom_priorityomnia'])] if self.project_key == 'OMNIA' else self.mappings['xray_priority'][str(data['priority_id'])]}
+                "priority": {"id": self.mappings['xray_priority'].get(str(data.get('custom_priorityomnia')), self.mappings['xray_priority']['3']) if self.project_key == 'OMNIA' else self.mappings['xray_priority'].get(str(data.get('priority_id')), self.mappings['xray_priority']['3'])}
             }
         }
         if issue_type == 'Test Execution' and data['description']:
@@ -85,20 +85,26 @@ class XrayClient:
         elif issue_type == self.issue_type:
             payload['fields']["description"] = self.strip_html(data['custom_description']) if data['custom_description'] else '' #Description
             payload['fields']["customfield_10270"] = test_repo if test_repo else self.test_repository # Test Repository Path
-            payload['fields']["customfield_11426"] =  {"id": self.mappings[f'{self.project_key.lower()}_automation_status'][str(data['custom_automatedd'])] if self.project_key not in ['UKQA', 'RGE', 'OMNIA'] else self.mappings[f'{self.project_key.lower()}_automation_status'][str(data.get('custom_autotype'))]} # Test Automation status TODO
+            automation_status_map = self.mappings.get(f'{self.project_key.lower()}_automation_status', {})
+            default_automation_id = list(automation_status_map.values())[0] if automation_status_map else '10600'
+            if self.project_key not in ['UKQA', 'RGE', 'OMNIA']:
+                automation_id = automation_status_map.get(str(data.get('custom_automatedd')), default_automation_id)
+            else:
+                automation_id = automation_status_map.get(str(data.get('custom_autotype')), default_automation_id)
+            payload['fields']["customfield_11426"] = {"id": automation_id}
             payload['fields']['customfield_13006'] = self.strip_html(data['custom_preconds']) #Preconditions Previous id 12901
             payload['fields']['customfield_13001'] = f'S{data['suite_id']}' #Test Suit ID 12903
             payload['fields']['customfield_13004'] = f'C{data['id']}' # Test rail Id 12906
             payload['fields']['customfield_13003'] = data['refs'] #References 12905
             payload['fields']['customfield_13000'] = {'id': self.mappings['xr_test_level']['1'] if data['type_id'] == 1 else self.mappings['xr_test_level']['6']} # Test Level Acceptance/Functional 12902
             if self.project_key in ['DFE', 'DF']:
-                payload['fields']['labels'] = [self.mappings['custom_brand'][str(data['custom_brand'])].replace(" ", "_")]
-                payload['fields']['customfield_13005'] = {'id': self.get_custom_device(data['custom_device'])}  # Device 12907
-                payload['fields']['customfield_13002'] = self.mappings['feature_map'][str(data['custom_feature'])]  # Feature dictionary 12904
+                payload['fields']['labels'] = [self.mappings['custom_brand'].get(str(data.get('custom_brand')), 'Unknown').replace(" ", "_")]
+                payload['fields']['customfield_13005'] = {'id': self.get_custom_device(data.get('custom_device', []))}  # Device 12907
+                payload['fields']['customfield_13002'] = self.mappings['feature_map'].get(str(data['custom_feature']) if data['custom_feature'] else '', '')  # Feature dictionary 12904
             if self.project_key in ['OMNIA', 'RGE', 'UKQA']:
-                payload['fields']['customfield_13101'] = {'id': self.mappings['lead_sign_off'][str(data['custom_omnialeadreview'])]} #lead sign off
-                payload['fields']['customfield_13100'] = {'id': self.mappings['hard_ware_dependent'][str(data.get('custom_hardwaredependent', None))]} #hard_ware_dependent NA for ukqa
-                payload['fields']['customfield_10292'] = {'id' : self.mappings['omnia_squad_map'][str(data['custom_squad_name'])] if self.project_key == 'OMNIA' else self.mappings['gbs_squad_map'][str(data.get('custom_case_gbs_squad', None))]}
+                payload['fields']['customfield_13101'] = {'id': self.mappings['lead_sign_off'].get(str(data.get('custom_omnialeadreview')), self.mappings['lead_sign_off']['0'])} #lead sign off
+                payload['fields']['customfield_13100'] = {'id': self.mappings['hard_ware_dependent'].get(str(data.get('custom_hardwaredependent')), self.mappings['hard_ware_dependent']['0'])} #hard_ware_dependent NA for ukqa
+                payload['fields']['customfield_10292'] = {'id' : self.mappings['omnia_squad_map'].get(str(data.get('custom_squad_name')), self.mappings['omnia_squad_map']['0']) if self.project_key == 'OMNIA' else self.mappings['gbs_squad_map'].get(str(data.get('custom_case_gbs_squad')), self.mappings['gbs_squad_map']['0'])}
         self._logger.debug(f"Payload prepared for issue creation: {json.dumps(payload, indent=2)}")
         response = do_request(url='{host_name}rest/api/2/issue'.format(host_name=self.url), method='POST',json_=payload, headers=self.headers, allow_redirects=False)
         self._logger.info(f"Issue created successfully: {response.get('key', 'N/A')}")

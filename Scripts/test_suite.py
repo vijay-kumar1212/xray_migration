@@ -14,7 +14,7 @@ from xray.xray_client import XrayClient
 class TestSuiteExport(TestRailClient):
     _logger = setup_custom_logger()
 
-    def export_test_suite_to_xray(self,project_id=36,suite_id=637):
+    def export_test_suite_to_xray(self,project_id=36,suite_id=20364):
         self._logger.info(f"Starting test suite export - Project ID: {project_id}, Suite ID: {suite_id}")
         sections = self.get_all_sections_data(project_id, suite_id)
         self._logger.info(f"Retrieved {len(sections)} sections")
@@ -146,8 +146,18 @@ class TestSuiteExport(TestRailClient):
         Returns dict: {section_id: full_path}
         """
         self._logger.debug(f"Building folder paths for {len(sections)} sections")
+
         section_map = {s['id']: s for s in sections}
         path_cache = {}
+
+        def clean_name(value):
+            if not isinstance(value, str):
+                return ""
+            value = re.sub(r'[\"\']', '', value)
+            value = re.sub(r'[\\/]', ' or ', value)
+            value = re.sub(r'\s*>\s*', '/', value)
+            value = re.sub(r'\s+', ' ', value)
+            return value.strip()
 
         def _build_path(sec_id):
             if sec_id in path_cache:
@@ -156,22 +166,23 @@ class TestSuiteExport(TestRailClient):
             sec = section_map.get(sec_id)
             if not sec:
                 return ""
-            
-            clean_name = sec['name'].replace('\\', '').replace("'", '')
-            
-            if sec['parent_id'] is None:
-                path_cache[sec_id] = clean_name
+
+            cleaned_name = clean_name(sec.get('name'))
+
+            if sec.get('parent_id') is None:
+                full_path = cleaned_name
             else:
-                parent_path = _build_path(sec['parent_id'])
-                path_cache[sec_id] = f"{parent_path}/{clean_name}"
-            return path_cache[sec_id]
+                parent_path = _build_path(sec.get('parent_id'))
+                full_path = f"{parent_path}/{cleaned_name}" if parent_path else cleaned_name
+
+            path_cache[sec_id] = full_path
+            return full_path
 
         # Build paths for all sections
         for s in sections:
             _build_path(s['id'])
 
         return path_cache
-
 obj = TestSuiteExport()
 obj._logger.info("=== Starting TestRail to Xray migration ===")
 all_cases = obj.export_test_suite_to_xray()
