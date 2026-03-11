@@ -9,6 +9,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import requests
+from io import BytesIO
+from PIL import Image
 
 from utilities.log_mngr import setup_custom_logger
 from utilities.requests_wrapper import do_request
@@ -21,9 +23,9 @@ class XrayClient:
     #https://jira-enterprise-uat.corp.entaingroup.com
     def __init__(self,
                  base_url='https://jira-enterprise.corp.entaingroup.com/',
-                 project_key='DBT', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
+                 project_key='GBS', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = 'Trading - Amelco/Racing Pack - BM', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
+                 test_repo_ = 'Sample', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -68,6 +70,68 @@ class XrayClient:
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = '\n'.join(chunk for chunk in chunks if chunk)
         return text
+    @staticmethod
+    def compress_image(image_bytes, max_size_kb=500, quality=85):
+        """
+        Compress image to reduce file size
+
+        Args:
+            image_bytes: Original image bytes
+            max_size_kb: Maximum target size in KB (default 500KB)
+            quality: JPEG quality 1-100 (default 85)
+
+        Returns:
+            Compressed image bytes
+        """
+        try:
+            # Open image from bytes
+            img = Image.open(BytesIO(image_bytes))
+
+            # Convert RGBA to RGB if necessary (for JPEG compatibility)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = background
+
+            # Get original size
+            original_size = len(image_bytes) / 1024  # KB
+
+            # If already small enough, return original
+            if original_size <= max_size_kb:
+                return image_bytes
+
+            # Compress with quality adjustment
+            output = BytesIO()
+            current_quality = quality
+
+            # Try compressing with decreasing quality until size is acceptable
+            while current_quality > 20:
+                output.seek(0)
+                output.truncate()
+                img.save(output, format='JPEG', quality=current_quality, optimize=True)
+                compressed_size = output.tell() / 1024  # KB
+
+                if compressed_size <= max_size_kb:
+                    break
+
+                current_quality -= 10
+
+            compressed_bytes = output.getvalue()
+            compressed_size = len(compressed_bytes) / 1024
+
+            XrayClient._logger.debug(
+                f"Image compressed: {original_size:.1f}KB -> {compressed_size:.1f}KB "
+                f"(quality={current_quality}, reduction={((original_size-compressed_size)/original_size*100):.1f}%)"
+            )
+
+            return compressed_bytes
+
+        except Exception as e:
+            XrayClient._logger.warning(f"Image compression failed: {str(e)}, using original")
+            return image_bytes
+
 
     def create_issue(self, data, issue_type=None,test_repo=None):
         self._logger.info(f"Creating issue: type={issue_type or self.issue_type}, project={self.project_key}")
@@ -161,7 +225,11 @@ class XrayClient:
                         if not attachment_data:
                             self._logger.warning(f"Skipping attachment {attachment_id} - no data returned")
                             continue
-                        encoded_data = base64.b64encode(attachment_data).decode("utf-8")
+                        
+                        # Compress image before encoding
+                        compressed_data = self.compress_image(attachment_data)
+                        encoded_data = base64.b64encode(compressed_data).decode("utf-8")
+                        
                         file_name = f'{file_name}.png'
                         mime_type, _ = mimetypes.guess_type(file_name)
                         mime_type = mime_type or "application/octet-stream"

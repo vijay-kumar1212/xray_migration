@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+from io import BytesIO
+from PIL import Image
 
 from utilities.log_mngr import setup_custom_logger
 
@@ -20,6 +22,68 @@ class TestSuiteExport(TestRailClient):
         super().__init__()
         self.excel_lock = Lock()
         self.counter_lock = Lock()
+
+    @staticmethod
+    def compress_image(image_bytes, max_size_kb=500, quality=85):
+        """
+        Compress image to reduce file size
+        
+        Args:
+            image_bytes: Original image bytes
+            max_size_kb: Maximum target size in KB (default 500KB)
+            quality: JPEG quality 1-100 (default 85)
+        
+        Returns:
+            Compressed image bytes
+        """
+        try:
+            # Open image from bytes
+            img = Image.open(BytesIO(image_bytes))
+            
+            # Convert RGBA to RGB if necessary (for JPEG compatibility)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = background
+            
+            # Get original size
+            original_size = len(image_bytes) / 1024  # KB
+            
+            # If already small enough, return original
+            if original_size <= max_size_kb:
+                return image_bytes
+            
+            # Compress with quality adjustment
+            output = BytesIO()
+            current_quality = quality
+            
+            # Try compressing with decreasing quality until size is acceptable
+            while current_quality > 20:
+                output.seek(0)
+                output.truncate()
+                img.save(output, format='JPEG', quality=current_quality, optimize=True)
+                compressed_size = output.tell() / 1024  # KB
+                
+                if compressed_size <= max_size_kb:
+                    break
+                    
+                current_quality -= 10
+            
+            compressed_bytes = output.getvalue()
+            compressed_size = len(compressed_bytes) / 1024
+            
+            TestSuiteExport._logger.debug(
+                f"Image compressed: {original_size:.1f}KB -> {compressed_size:.1f}KB "
+                f"(quality={current_quality}, reduction={((original_size-compressed_size)/original_size*100):.1f}%)"
+            )
+            
+            return compressed_bytes
+            
+        except Exception as e:
+            TestSuiteExport._logger.warning(f"Image compression failed: {str(e)}, using original")
+            return image_bytes
 
     def process_single_case(self, case, test_repository, xray):
         """Process a single test case - designed for multithreading"""
@@ -45,10 +109,12 @@ class TestSuiteExport(TestRailClient):
                         try:
                             attachment_data, file_name = self.get_attachment(attachment_id)
                             if attachment_data:
+                                # Compress image before uploading
+                                compressed_data = self.compress_image(attachment_data)
                                 xray.upload_jira_attachment(
                                     issue_key=x_case['key'],
                                     file_name=f'prerequisite_{file_name}.png',
-                                    file_bytes=attachment_data
+                                    file_bytes=compressed_data
                                 )
                         except Exception as e:
                             self._logger.warning(f"Skipping attachment {attachment_id} for case {case['id']}: {str(e)}")

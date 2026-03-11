@@ -43,8 +43,8 @@ gbs_auto_type = {
     1: '13503', # Automated
     2: '13501', # Manual  # xray:"Ready For Automation"
     3: '13500', # Cannot Automate
-    4: "Automation Candidate",
-    5: "Automated but descoped/deprecated"
+    4: "13501",
+    5: "13504"
     }
 envision_auto_type = {
     1: '13501', # New
