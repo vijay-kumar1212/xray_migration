@@ -9,8 +9,8 @@ class TestRailClient:
     _logger = setup_custom_logger()
     def __init__(self,
                  base_url="https://ladbrokescoral.testrail.com/",
-                 project_id = 36,
-                 suite_id = 3779,
+                 project_id = 50,
+                 suite_id = 77528,
                  mile_stone_id = 1026,
                  user = None,   # vijaykumar.panga@ivycomptech.com   Vijay123
                  password = None):
@@ -118,6 +118,16 @@ class TestRailClient:
     def get_section_cases(self, suite_id, section_id):
         cases = requests.get(url=f'{self.url}/get_cases/{self.project_id}&suite_id={suite_id}&section_id={section_id}',headers=self.headers).json()
         return cases
+
+    def get_plan(self, plan_id):
+        """
+        :param plan_id: The ID of the test plan
+        :return: an existing test plan
+        """
+        # self._logger.info('********* Collecting Test Plan data from testrail **********')
+        # print('********* Collecting Test Plan data from testrail **********')
+        return requests.get(url='%s/get_plan/%s'%(self.url, plan_id), headers=self.headers).json()
+
 
     def get_runs(self, is_completed=0):
         """

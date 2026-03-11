@@ -9,7 +9,7 @@ class TestCaseCreation(TestRailClient):
         xray = XrayClient()
         for case_id, test_repo in case_data:
             tr_case_data = self.get_case(case_id).json()
-            test_repo_ = f'/{xray.test_repository}/{test_repo}'  #TODO
+            test_repo_ = f'/{xray.test_repository}/{test_repo}'  #TODO  f'/{xray.test_repository}/{}
 
             # case = xray.get_test_case(key='DF-2292')
             case = xray.create_issue(data=tr_case_data, issue_type='Test', test_repo=test_repo_) # TODO
@@ -18,7 +18,7 @@ class TestCaseCreation(TestRailClient):
                 self._logger.warning(f'Failed to import Test case: {case_id} from section {test_repo_}') # TODO
                 print(case)
             else:
-                self._logger.info(f"Test case imported successfully: {case['key']}")
+                self._logger.info(f"Test case {case_id}imported successfully: {case['key']}")
             preconditions = tr_case_data.get('custom_preconds')
             if preconditions and "index.php?/attachments/get/" in preconditions:
                 attachment_ids = list(set(re.findall(r'index\.php\?/attachments/get/([\w-]+)', preconditions)))
@@ -37,12 +37,14 @@ class TestCaseCreation(TestRailClient):
 
 
 obj = TestCaseCreation()
-file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\Scripts\symphony___oxygen_qa (3).xlsx") #TODO
+file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\ob digital optimized regression manual_filtered.xlsx") #TODO
 file_1['ID'] = file_1['ID'].astype(str).str.replace(r'^C', '', regex=True)
 file_1['Section Hierarchy'] = (
     file_1['Section Hierarchy']
-        .str.replace("'", "", regex=False)                # remove single quotes  (.str.replace(r"[\\/]", " or ", regex=True)   # replace / or \ with ' or '    *** .str.replace(r"\s*>\s*", "/", regex=True)        # replace > with /)
-        .str.replace(r"\s+", " ", regex=True)            # clean extra spaces
+        .str.replace(r"[\"']", "", regex=True)
+        .str.replace(r"[\\/]", " & ", regex=True)# remove single quotes  (.str.replace(r"[\\/]", " or ", regex=True)   # replace / or \ with ' or '    *** .str.replace(r"\s*>\s*", "/", regex=True)        # replace > with /)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.replace(r"\s*>\s*", "/", regex=True)# clean extra spaces
         .str.strip()
 )
 case_data = list(zip(file_1['ID'], file_1['Section Hierarchy']))

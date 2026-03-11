@@ -21,9 +21,9 @@ class XrayClient:
     #https://jira-enterprise-uat.corp.entaingroup.com
     def __init__(self,
                  base_url='https://jira-enterprise.corp.entaingroup.com/',
-                 project_key='DFE', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
+                 project_key='DBT', # TODO DFE,DF, DBT OMNIA, RGE for GBS, UKQA for envision,
                  issue_type='Test',
-                 test_repo_ = 'LCG Sportsbook Master TestSuite', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
+                 test_repo_ = 'Trading - Amelco/Racing Pack - BM', #TODO  modify the Test Repository Path based on the project LCG Digital Master Suite
                  test_set_id=None,
                  pat=None):
         self.url = base_url
@@ -80,7 +80,7 @@ class XrayClient:
             }
         }
         if issue_type == 'Test Execution' and data['description']:
-            payload['decription'] = data['description']
+            payload['description'] = data['description']
             payload['priority'] = '10001'
         elif issue_type == self.issue_type:
             payload['fields']["description"] = self.strip_html(data['custom_description']) if data['custom_description'] else '' #Description
@@ -110,14 +110,23 @@ class XrayClient:
         self._logger.info(f"Issue created successfully: {response.get('key', 'N/A')}")
         return response
 
-    def create_test_plan_or_execution(self,test_plan_name,data):
-        # payload = {"fields": {
-        #         "project": {"key": self.project_key},
-        #         "summary": test_plan_name,
-        #         "issuetype": {"name": 'Test Plan'},
-        #         "description": data['description'],
-        #     }
-        return True
+    def create_test_plan_or_execution(self,issue_type, test_plan_name = None, test_run_name=None):
+        self._logger.info(f"Creating issue: type={issue_type or self.issue_type}, project={self.project_key}")
+        payload = {
+            "fields": {
+                "project": {"key": self.project_key},
+                "summary": test_plan_name.replace("\r", "").replace("\n", " ") if issue_type == 'Test Plan' else test_run_name.replace("\r", "").replace("\n", " "),
+                "issuetype": {"name": issue_type},
+                # 'description' : data['description'],
+                'priority' : {'id': '10001'}
+            }
+        }
+        self._logger.debug(f"Payload prepared for issue creation: {json.dumps(payload, indent=2)}")
+        response = do_request(url='{host_name}rest/api/2/issue'.format(host_name=self.url), method='POST',
+                              json_=payload, headers=self.headers, allow_redirects=False)
+        self._logger.info(f"Issue created successfully: {response.get('key', 'N/A')}")
+        return response
+
     def add_steps_to_the_test_case(self, key, steps, testrail_client=None):
         self._logger.info(f"Adding {len(steps)} steps to test case: {key}")
         url = f"{self.url}rest/raven/1.0/api/test/{key}/step/"
@@ -227,7 +236,7 @@ class XrayClient:
             raise Exception(f"Upload failed {response.status_code}: {response.text}")
         return response.json()[0]  # attachment metadata
 
-    def get_cases_from_section(self, section_id = None, project_key = None, limit = 100, all_descendants = True):
+    def get_cases_from_section(self, section_id = None, project_key = None, limit = 1000, all_descendants = True):
         """
         :param section_id:
         :param project_key:
