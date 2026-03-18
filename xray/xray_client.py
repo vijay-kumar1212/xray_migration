@@ -108,7 +108,7 @@ class XrayClient:
             payload['fields']["description"] = self.strip_html(data['custom_description']) if data[
                 'custom_description'] else ''
             payload['fields']["customfield_10270"] = test_repo if test_repo else self.test_repository
-            automation_status_map = self.mappings.get(f'rge_automation_status', {})
+            automation_status_map = self.mappings.get(f'{self.project_key.lower()}_automation_status', {})
             default_automation_id = list(automation_status_map.values())[0] if automation_status_map else '10600'
             if self.project_key not in ['UKQA', 'RGE', 'OMNIA']:
                 automation_id = automation_status_map.get(str(data.get('custom_automatedd')), default_automation_id)
@@ -319,6 +319,14 @@ class XrayClient:
         url = f'{self.url}/rest/raven/1.0/api/test?keys={key}'
         response = requests.get(url=url, headers=self.headers, verify=False)
         return response
+    def get_issue_summary(self, key):
+        """Fetch the summary (title) of a Jira issue by key"""
+        url = f'{self.url}rest/api/2/issue/{key}?fields=summary'
+        response = requests.get(url=url, headers=self.headers, verify=False)
+        if response.status_code == 200:
+            return response.json()['fields']['summary']
+        return None
+
 
     def get_field_options(self):
         url = self.url + '/rest/api/3/issue/{DF-2292}'
@@ -380,3 +388,16 @@ class XrayClient:
         return do_request(
             url=f'{self.url}rest/raven/1.0/api/testrepository/{self.project_key}/folders/{section}/folders',
             method=method, headers=self.headers)
+
+    def get_tests_in_execution(self, test_exec_key: str):
+        """
+        Get all tests in a Test Execution
+
+        :param test_exec_key: Test Execution key
+        :return: List of test data
+        """
+        return do_request(
+            method='GET',
+            url=f'{self.url}rest/raven/1.0/api/testexec/{test_exec_key}/test',
+            headers=self.headers
+        )
