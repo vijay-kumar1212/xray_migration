@@ -33,12 +33,15 @@ class TestRailRunToXray(TestRailClient):
         # TR_STATUSES = {'passed': 1, 'canceled': 2, 'blocked': 2, 'broken': 2, 'untested': 3, 'retest': 4, 'failed': 5}
         for case in x_cases:
             case_key = case['key']
-            case_ = xray.get_test_case(key = case_key)
-            name = case_['fields']['summary']
+            case_ = xray.get_test_case(key=case_key)
+            if case_.status_code != 200:
+                continue
+            case_data = case_.json()
+            name = case_data.get('fields', {}).get('summary', '')
             for case_name_, status_id in all_cases:
                 if name == case_name_:
-                    identified_x_cases.append(case_['key'])
-                    case_status[case_['key']] = status_id
+                    identified_x_cases.append(case_key)
+                    case_status[case_key] = status_id
         xray.add_tests_to_test_run(key=test_run_key, issues_list=identified_x_cases)
         # run_statuses = xray.get_run_test_statuses()
         

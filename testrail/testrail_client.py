@@ -9,8 +9,8 @@ class TestRailClient:
     _logger = setup_custom_logger()
     def __init__(self,
                  base_url="https://ladbrokescoral.testrail.com/",
-                 project_id = 50,
-                 suite_id = 77528,
+                 project_id = 109,
+                 suite_id = 8696,
                  mile_stone_id = 1026,
                  user = None,   # vijaykumar.panga@ivycomptech.com   Vijay123
                  password = None):

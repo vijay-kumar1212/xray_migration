@@ -160,7 +160,7 @@ class TestSuiteExport(TestRailClient):
                 'Status of Adding Steps to Xray': "Not Attempted"
             }
 
-    def export_test_suite_to_xray(self, project_id=50, suite_id=2753, max_workers=10):
+    def export_test_suite_to_xray(self, project_id=109, suite_id=159059, max_workers=10): # TODO
         self._logger.info(f"Starting test suite export - Project ID: {project_id}, Suite ID: {suite_id}, Max Workers: {max_workers}")
         sections = self.get_all_sections_data(project_id, suite_id)
         self._logger.info(f"Retrieved {len(sections)} sections")

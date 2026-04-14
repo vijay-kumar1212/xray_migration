@@ -49,10 +49,11 @@ def do_request(url, method="GET", headers=None, data=None, json_=None, proxies=N
     if data:
         data = json.dumps(data)
 
+    # verify=True for Jira Cloud (proper SSL); was verify=False for on-prem Server
     try:
         r = _session.request(
             url=url, method=method, headers=headers, data=data,
-            json=json_, proxies=proxies, verify=False, timeout=60,
+            json=json_, proxies=proxies, verify=True, timeout=60,
             **keywords
         )
     except Exception as e:
@@ -60,7 +61,7 @@ def do_request(url, method="GET", headers=None, data=None, json_=None, proxies=N
         sleep(2)
         r = _session.request(
             url=url, method=method, headers=headers, data=data,
-            json=json_, proxies=proxies, verify=False, timeout=60,
+            json=json_, proxies=proxies, verify=True, timeout=60,
             **keywords
         )
 

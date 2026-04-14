@@ -50,7 +50,7 @@ class TestCaseCreation(TestRailClient):
 
         for case_id, test_repo in case_data:
             case_id_str = str(case_id)
-            test_repo_ = f'/{test_repo}'
+            test_repo_ = test_repo
             x_case = None
             export_status = "Failed"
             steps_status = "Not Attempted"
@@ -111,8 +111,8 @@ class TestCaseCreation(TestRailClient):
                 })
                 processed_count += 1
 
-                # Update Excel every 50 cases for progress tracking
-                if processed_count % 50 == 0:
+                # Update Excel every 10 cases for progress tracking
+                if processed_count % 10 == 0:
                     pd.DataFrame(excel_data).to_excel(successful_cases_file, index=False)
                     if failed_cases:
                         pd.DataFrame(failed_cases).to_excel(failed_cases_file, index=False)
@@ -149,15 +149,10 @@ class TestCaseCreation(TestRailClient):
 # === INPUT: Excel file reading — UNCHANGED from original implementation ===
 obj = TestCaseCreation()
 obj._logger.info("=== Starting TestRail to Xray re-import ===")
-file_1 = pd.read_excel(
-    r"/Users/sakella/PycharmProjects/xray_migration/Scripts/failed_cases_test1_20260317_104755.xlsx")  # TODO
+file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\Scripts\failed2_re_import_cases.xlsx")  # TODO
 file_1['test_rail_id'] = file_1['test_rail_id'].astype(str).str.replace(r'^C', '', regex=True)
 file_1['Test Repository'] = (
-    file_1['Test Repository']
-    .str.replace("'", "", regex=False)
-    .str.replace(r"\s+", " ", regex=True)
-    .str.strip()
-)
+    file_1['Test Repository'].str.strip())
 case_data = list(zip(file_1['test_rail_id'], file_1['Test Repository']))
 obj.test_create_case_in_xray(case_data)
 obj._logger.info("=== Re-import completed ===")

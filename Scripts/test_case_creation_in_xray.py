@@ -7,16 +7,17 @@ class TestCaseCreation(TestRailClient):
 
     def test_create_case_in_xray(self, case_data): #66331235, 60092721 OMNIA, envision C65763904,RGE 66386708 dbt 62171047, df C869515
         xray = XrayClient()
-        for case_id, test_repo in case_data:
+        for case_id in case_data:
             tr_case_data = self.get_case(case_id).json()
-            test_repo_ = f'/Functional Pack To be Migrated/{test_repo}'  #TODO  f'/{xray.test_repository}/{}
+            test_repo_ = f'/{xray.test_repository}'  #TODO  f'/{xray.test_repository}/{test_repo}'
 
             # case = xray.get_test_case(key='DF-2292')
             case = xray.create_issue(data=tr_case_data, issue_type='Test',test_repo=test_repo_) # TODO
 
             if not case or 'key' not in case:
-                self._logger.warning(f'Failed to import Test case: {case_id} from section {test_repo_}') # TODO
+                self._logger.warning(f'Failed to import Test case: {case_id} from section {test_repo_}')
                 print(case)
+                continue
             else:
                 self._logger.info(f"Test case {case_id}imported successfully: {case['key']}")
             preconditions = tr_case_data.get('custom_preconds')
@@ -37,16 +38,15 @@ class TestCaseCreation(TestRailClient):
 
 
 obj = TestCaseCreation()
-file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\Functional Pack To be Migrated.xlsx") #TODO
-file_1['ID'] = file_1['ID'].astype(str).str.replace(r'^C', '', regex=True)
-file_1['Section Hierarchy'] = (
-    file_1['Section Hierarchy']
-        .str.replace(r"[\"']", "", regex=True)
-        .str.replace(r"[\\/]", " & ", regex=True)# remove single quotes  (.str.replace(r"[\\/]", " or ", regex=True)   # replace / or \ with ' or '    *** .str.replace(r"\s*>\s*", "/", regex=True)        # replace > with /)
-        .str.replace(r"\s+", " ", regex=True)
-        .str.replace(r"\s*>\s*", "/", regex=True)# clean extra spaces
-        .str.strip()
-)
-case_data = list(zip(file_1['ID'], file_1['Section Hierarchy']))
-# case_data = [73733476]
+# file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\connect test.xlsx") #TODO
+# file_1['ID'] = file_1['ID'].astype(str).str.replace(r'^C', '', regex=True)
+# file_1['Section Hierarchy'] = (file_1['Section Hierarchy'].str.strip()
+#         .str.replace(r"[\"']", "", regex=True)
+#         .str.replace(r"[\\/]", " & ", regex=True)# remove single quotes  (.str.replace(r"[\\/]", " or ", regex=True)   # replace / or \ with ' or '    *** .str.replace(r"\s*>\s*", "/", regex=True)        # replace > with /)
+#         .str.replace(r"\s+", " ", regex=True)
+#         .str.replace(r"\s*>\s*", "/", regex=True)# clean extra spaces
+#         .str.strip()
+# )
+# case_data = list(zip(file_1['ID'], file_1['Section Hierarchy']))
+case_data = [60493367, 65830055]
 obj.test_create_case_in_xray(case_data)

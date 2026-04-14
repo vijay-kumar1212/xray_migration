@@ -9,17 +9,17 @@ xray_priority = {
     }
 
 automation_status = {
-        3: '13500',  # xray: "Can't Automate" testrail:Cannot be automated
+        3: '13500',  #13423 xray: "Can't Automate" testrail:Cannot be automated
 
-        1: '13501',  # xray:"Ready For Automation" testrail:Manual
+        1: '13501',  # 13424 xray:"Ready For Automation" testrail:Manual
 
-        'Automation In Progress': '13502',
+        'Automation In Progress': '13502', # 13425
 
-        2: '13503',  # "Automated"
+        2: '13503',  # "Automated" 13426
 
-        'Maintenance': 13504,
+        'Maintenance': 13504, # 13427
 
-        'No Automation Required': 13505
+        'No Automation Required': 13505 # 13428
     }
 df_automation_type = {
     1: '13501', # Manual
