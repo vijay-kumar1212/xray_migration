@@ -35,9 +35,9 @@ class XrayClient:
 
     def __init__(self,
                  base_url='https://entain-test.atlassian.net/',
-                 project_key='DFE',
+                 project_key='OMNIA',
                  issue_type='Test',
-                 test_repo_='Test',
+                 test_repo_='Cloud Instance Test',
                  test_set_id=None,
                  jira_email=None,
                  jira_api_token=None):
@@ -173,7 +173,7 @@ class XrayClient:
             "summary": (data['title'].replace("\r", "").replace("\n", " ")
                         if issue_type == self.issue_type else data['name']),
             "issuetype": {"name": issue_type or self.issue_type},
-            "description": data['description'],
+            "description": adf_desc,
             "priority": {"name": (
                 self.mappings['xray_priority'].get(str(data.get('custom_priorityomnia')),
                     self.mappings['xray_priority']['2']) if self.project_key == 'OMNIA'
@@ -183,7 +183,7 @@ class XrayClient:
         if issue_type == 'Test Execution':
             payload['fields']['priority'] = {'name': 'Medium'}
         elif issue_type == self.issue_type:
-            auto_map = self.mappings.get('rge_automation_status', {})
+            auto_map = self.mappings.get(f'{self.project_key.lower()}_automation_status', {}) # TODO
             default_auto = list(auto_map.values())[0] if auto_map else '10600'
             auto_id = (auto_map.get(str(data.get('custom_automatedd')), default_auto)
                        if self.project_key not in ['UKQA', 'RGE', 'OMNIA']
@@ -231,8 +231,72 @@ class XrayClient:
 
         return response
 
-    def create_test_plan_or_execution(self, test_plan_name, data):
-        return True
+    def create_test_plan(self, name, project_key=None):
+        """Create a Test Plan issue in Jira via REST API v3."""
+        project_key = project_key or self.project_key
+        self._logger.info(f"Creating Test Plan: '{name}' in project {project_key}")
+        adf_desc = {"version": 1, "type": "doc",
+                    "content": [{"type": "paragraph", "content": []}]}
+        payload = {"fields": {
+            "project": {"key": project_key},
+            "summary": name,
+            "issuetype": {"name": "Test Plan"},
+            "description": adf_desc
+        }}
+        response = do_request(url=f"{self.url}rest/api/3/issue", method='POST',
+                              json_=payload, headers=self.headers, allow_redirects=False)
+        if 'error' in response:
+            self._logger.error(f"Failed to create Test Plan: {response['error']}")
+            return response
+        self._logger.info(f"Test Plan created: {response.get('key', 'N/A')}")
+        return response
+
+    def create_test_execution(self, name, project_key=None, plan_key=None):
+        """Create a Test Execution issue and optionally link it to a Test Plan."""
+        project_key = project_key or self.project_key
+        self._logger.info(f"Creating Test Execution: '{name}' in project {project_key}")
+        adf_desc = {"version": 1, "type": "doc",
+                    "content": [{"type": "paragraph", "content": []}]}
+        payload = {"fields": {
+            "project": {"key": project_key},
+            "summary": name,
+            "issuetype": {"name": "Test Execution"},
+            "description": adf_desc
+        }}
+        response = do_request(url=f"{self.url}rest/api/3/issue", method='POST',
+                              json_=payload, headers=self.headers, allow_redirects=False)
+        if 'error' in response:
+            self._logger.error(f"Failed to create Test Execution: {response['error']}")
+            return response
+        self._logger.info(f"Test Execution created: {response.get('key', 'N/A')}")
+        if plan_key and self._xray_graphql_available:
+            try:
+                plan_resp = self._upload_session.get(
+                    f'{self.url}rest/api/3/issue/{plan_key}?fields=summary',
+                    headers=self.headers, timeout=30)
+                exec_resp = self._upload_session.get(
+                    f'{self.url}rest/api/3/issue/{response["key"]}?fields=summary',
+                    headers=self.headers, timeout=30)
+                if plan_resp.status_code == 200 and exec_resp.status_code == 200:
+                    plan_id = plan_resp.json()['id']
+                    exec_id = exec_resp.json()['id']
+                    link_result = self._graphql("""
+                        mutation AddTestExecutionsToTestPlan($testPlanIssueId: String!, $testExecIssueIds: [String!]!) {
+                            addTestExecutionsToTestPlan(issueId: $testPlanIssueId, testExecIssueIds: $testExecIssueIds) {
+                                addedTestExecutions
+                                warning
+                            }
+                        }
+                    """, {"testPlanIssueId": plan_id, "testExecIssueIds": [exec_id]})
+                    if link_result:
+                        self._logger.info(f"Linked {response['key']} to Test Plan {plan_key}")
+                    else:
+                        self._logger.warning(f"Failed to link {response['key']} to Test Plan {plan_key}")
+                else:
+                    self._logger.warning(f"Could not resolve keys for linking: {plan_key}, {response['key']}")
+            except Exception as e:
+                self._logger.warning(f"Error linking execution to plan: {e}")
+        return response
 
     def _move_test_to_folder(self, issue_key, folder_path):
         """Move a test into a Test Repository folder via Xray Cloud GraphQL."""
@@ -630,11 +694,66 @@ class XrayClient:
         """, {"issueId": exec_id, "testIssueIds": test_ids})
         return data
 
+    def _get_test_run_id(self, exec_key, test_key):
+        """Get the test run ID for a test within a test execution."""
+        if not self._xray_graphql_available:
+            return None
+        exec_resp = self._upload_session.get(
+            f'{self.url}rest/api/3/issue/{exec_key}?fields=summary',
+            headers=self.headers, timeout=30)
+        if exec_resp.status_code != 200:
+            self._logger.error(f"Could not resolve exec key: {exec_key}")
+            return None
+        exec_id = exec_resp.json()['id']
+        # Get test runs from the execution to find the run ID for this test
+        data = self._graphql("""
+            query GetTestExecution($issueId: String!) {
+                getTestExecution(issueId: $issueId) {
+                    testRuns(limit: 100) {
+                        results {
+                            id
+                            status { name }
+                            test {
+                                issueId
+                                jira(fields: ["key"])
+                            }
+                        }
+                    }
+                }
+            }
+        """, {"issueId": exec_id})
+        if not data or 'getTestExecution' not in data:
+            self._logger.error(f"Failed to get test runs for {exec_key}")
+            return None
+        runs = data['getTestExecution'].get('testRuns', {}).get('results', [])
+        for run in runs:
+            test_jira = run.get('test', {}).get('jira', {})
+            run_key = test_jira.get('key', '') if isinstance(test_jira, dict) else ''
+            if run_key == test_key:
+                return run['id']
+        self._logger.error(f"Test run not found for {test_key} in {exec_key}")
+        return None
+
     def update_test_status(self, exec_key, test_key, status):
         """Update test run status via Xray Cloud GraphQL."""
         if not self._xray_graphql_available:
             return None
-        # Resolve both keys to IDs
+        run_id = self._get_test_run_id(exec_key, test_key)
+        if not run_id:
+            return None
+        data = self._graphql("""
+            mutation UpdateTestRunStatus($id: String!, $status: String!) {
+                updateTestRunStatus(id: $id, status: $status)
+            }
+        """, {"id": run_id, "status": status})
+        return data
+
+    def get_test_run_steps(self, exec_key, test_key):
+        """Retrieve test run steps via Xray Cloud GraphQL."""
+        if not self._xray_graphql_available:
+            self._logger.error("Xray Cloud GraphQL not available")
+            return None
+        # Resolve both keys to issue IDs
         exec_resp = self._upload_session.get(
             f'{self.url}rest/api/3/issue/{exec_key}?fields=summary',
             headers=self.headers, timeout=30)
@@ -647,8 +766,72 @@ class XrayClient:
         exec_id = exec_resp.json()['id']
         test_id = test_resp.json()['id']
         data = self._graphql("""
-            mutation UpdateTestRunStatus($testExecIssueId: String!, $testIssueId: String!, $status: String!) {
-                updateTestRunStatus(testExecIssueId: $testExecIssueId, testIssueId: $testIssueId, status: $status)
+            query GetTestRun($testExecIssueId: String!, $testIssueId: String!) {
+                getTestRun(testExecIssueId: $testExecIssueId, testIssueId: $testIssueId) {
+                    id
+                    status { name }
+                    steps {
+                        id
+                        action
+                        data
+                        result
+                        status { name }
+                    }
+                }
             }
-        """, {"testExecIssueId": exec_id, "testIssueId": test_id, "status": status})
+        """, {"testExecIssueId": exec_id, "testIssueId": test_id})
+        if data and 'getTestRun' in data:
+            steps = data['getTestRun'].get('steps', [])
+            self._logger.info(f"Retrieved {len(steps)} steps for {test_key} in {exec_key}")
+            return steps
+        self._logger.error(f"Failed to get test run steps for {test_key} in {exec_key}")
+        return None
+
+    def update_test_run_step_status(self, exec_key, test_key, step_index, status):
+        """Update a single step's status within a test run."""
+        steps = self.get_test_run_steps(exec_key, test_key)
+        if steps is None:
+            return None
+        if step_index < 0 or step_index >= len(steps):
+            self._logger.error(f"Step index {step_index} out of range (0-{len(steps)-1}) for {test_key}")
+            return None
+        step_id = steps[step_index]['id']
+        data = self._graphql("""
+            mutation UpdateTestRunStep($testRunStepId: String!, $status: String!) {
+                updateTestRunStep(id: $testRunStepId, status: $status)
+            }
+        """, {"testRunStepId": step_id, "status": status})
+        if data is not None:
+            self._logger.debug(f"Step {step_index} of {test_key} updated to {status}")
+        else:
+            self._logger.error(f"Failed to update step {step_index} of {test_key}")
         return data
+
+    def update_all_step_statuses(self, exec_key, test_key, statuses):
+        """Bulk-update all step statuses for a test run."""
+        steps = self.get_test_run_steps(exec_key, test_key)
+        if steps is None:
+            self._logger.error(f"Cannot update step statuses for {test_key}")
+            return {"updated": 0, "failed": 0}
+        count = min(len(statuses), len(steps))
+        if len(statuses) != len(steps):
+            self._logger.warning(
+                f"Status count mismatch for {test_key}: {len(statuses)} statuses vs {len(steps)} steps. "
+                f"Updating first {count} steps.")
+        updated = 0
+        failed = 0
+        for i in range(count):
+            step_id = steps[i]['id']
+            result = self._graphql("""
+                mutation UpdateTestRunStep($testRunStepId: String!, $status: String!) {
+                    updateTestRunStep(id: $testRunStepId, status: $status)
+                }
+            """, {"testRunStepId": step_id, "status": statuses[i]})
+            if result is not None:
+                updated += 1
+                self._logger.debug(f"Step {i} of {test_key} -> {statuses[i]}")
+            else:
+                failed += 1
+                self._logger.error(f"Failed to update step {i} of {test_key}")
+        self._logger.info(f"Step status update for {test_key}: {updated} updated, {failed} failed")
+        return {"updated": updated, "failed": failed}

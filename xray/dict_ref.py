@@ -9,49 +9,45 @@ xray_priority = {
     }
 
 automation_status = {
-        3: '13500',  #13423 xray: "Can't Automate" testrail:Cannot be automated
-
-        1: '13501',  # 13424 xray:"Ready For Automation" testrail:Manual
-
-        'Automation In Progress': '13502', # 13425
-
-        2: '13503',  # "Automated" 13426
-
-        'Maintenance': 13504, # 13427
-
-        'No Automation Required': 13505 # 13428
+        3: '13423',  # Can't Automate (testrail: Cannot be automated)
+        1: '13424',  # Ready For Automation (testrail: Manual)
+        'Automation In Progress': '13425',  # Automation In Progress
+        2: '13426',  # Automated
+        'Maintenance': '13427',  # Maintenance
+        'No Automation Required': '13428'  # No Automation Required
     }
 df_automation_type = {
-    1: '13501', # Manual
-    2: '13503', # Automated
-    3: '13500', # Cannot be automated
+    1: '13424',  # Manual → Ready For Automation
+    2: '13426',  # Automated → Automated
+    3: '13423',  # Cannot be automated → Can't Automate
     }
 
 dbt_automation_type = {
         1: "Automation",
         2: "Manual"
     }
-omnia_auto_type = {  #Todo
-    1: "New",
-    2: "Automation Candidate",
-    3: '13503', # Automated
-    4: '13500', # Cannot Automate
-    5: "PR raised yet to merge",
-    6: "Automated but descoped/deprecated"
+omnia_auto_type = {
+    1: "-1",      # New → None (no Xray equivalent)
+    2: "13424",   # Automation Candidate → Ready For Automation
+    3: "13426",   # Automated → Automated
+    4: "13423",   # Cannot Automate → Can't Automate
+    5: "13425",   # PR raised yet to merge → Automation In Progress
+    6: "13427",   # Automated but descoped/deprecated → Maintenance
+    7: "13424"    # Manual → Ready For Automation
     }
 gbs_auto_type = {
-    1: '13503', # Automated
-    2: '13501', # Manual  # xray:"Ready For Automation"
-    3: '13500', # Cannot Automate
-    4: "13501",
-    5: "13504"
+    1: '13426',  # Automated → Automated
+    2: '13424',  # Manual → Ready For Automation
+    3: '13423',  # Cannot Automate → Can't Automate
+    4: '13424',  # → Ready For Automation
+    5: '13427'   # → Maintenance
     }
 envision_auto_type = {
-    1: '13501', # New
-    2: "Automation Candidate",
-    3: '13503', # Automated
-    4: '13500', # Cannot Automate
-    5: "Automated but descoped/deprecated"
+    1: '-1',      # New → None
+    2: '13424',   # Automation Candidate → Ready For Automation
+    3: '13426',   # Automated → Automated
+    4: '13423',   # Cannot Automate → Can't Automate
+    5: '13427'    # Automated but descoped/deprecated → Maintenance
 }
 custom_brand = {
 
@@ -70,14 +66,14 @@ xr_devices = {
     }
 
 omnia_squads = {
-    1: "Marvels",
-    3: "Spartans",
-    2: "Mavericks",
-    4: "Falcons",
-    5: "Guardians",
-    6: "Core Cobras",
-    7: "Wolfpack (old cell)",
-    8: "Regression Squad"
+    1: "12369",   # Marvels → OMNIA>Retail Marvels
+    2: "12370",   # Mavericks → OMNIA>Retail Mavericks
+    3: "12371",   # Spartans → OMNIA>Retail Spartans
+    4: "12367",   # Falcons → OMNIA>Retail Falcons
+    5: "12368",   # Guardians → OMNIA>Retail Guardians
+    6: "12365",   # Core Cobras → OMNIA>Retail Core Cobra
+    7: "-1",      # Wolfpack (old cell) → IGNORE
+    8: "12505"    # Regression Squad → UKQA>Omnia
     }
 gbs_squad = {
     1: "E Nerds",
@@ -86,51 +82,35 @@ gbs_squad = {
 }
 
 assigned_squad_team_map = {
-    10832: "OMNIA>Retail Core Cobra", # Core Cobras
-    10833: "OMNIA>Retail Falcons", # Falcons
-    10835: "OMNIA>Retail Guardians", # Guardians
-    10837: "OMNIA>Retail Marvels", #"Marvels",
-    10839: "OMNIA>Retail Mavericks", # Mavericks
-    10841: "OMNIA>Retail Spartans", # Spartans
+    12365: "OMNIA>Retail Core Cobra",   # Core Cobras
+    12367: "OMNIA>Retail Falcons",      # Falcons
+    12368: "OMNIA>Retail Guardians",    # Guardians
+    12369: "OMNIA>Retail Marvels",      # Marvels
+    12370: "OMNIA>Retail Mavericks",    # Mavericks
+    12371: "OMNIA>Retail Spartans",     # Spartans
 
-    10824: "RGE&gt;Envision-Agni",
-    10826: "RGE&gt;Envision-Prithvi",
-    10828: "RGE&gt;GBS-DreamTeam", # Dream Team
-    10830: "RGE&gt;GBS-E.Nerds", # E Nerds
-    12212: "RGE&gt;UK Retail Product Design",
+    12413: "RGE>Envision-Agni",         # Envision Agni
+    12414: "RGE>Envision-Prithvi",      # Envision Prithvi
+    12415: "RGE>GBS-DreamTeam",         # Dream Team
+    12416: "RGE>GBS-E.Nerds",           # E Nerds
+    12417: "RGE>UK Retail Product Design",
 
-    12113: "UKQA>Envision",
-    12115: "UKQA>GBS", #"Acceptance Team"
-    12117: "UKQA>Load Testing",
-    12119: "UKQA>Omnia",
-    12121: "UKQA>Retail Automation",
-    12208: "UKQA>Retail CP",
-    12123: "UKQA>Sportbook Automation",
-    12125: "UKQA>Sportsbook Regression"
+    12502: "UKQA>Envision",
+    12503: "UKQA>GBS",
+    12504: "UKQA>Load Testing",
+    12505: "UKQA>Omnia",
+    12506: "UKQA>Retail Automation",
+    12507: "UKQA>Retail CP",
+    12508: "UKQA>Sportbook Automation",
+    12509: "UKQA>Sportsbook Regression"
     }
-lead_sign_off: {
-    "1": "14817",
-    "2": "14818",
+lead_sign_off = {
+    "1": "13934",   # Awaiting Lead Review
+    "2": "13935",   # Lead reviewed & signed off
     "None": "-1"
 }
-hard_ware_dependent: {
-    "1": "14815",
-    "2": "14816",
+hard_ware_dependent = {
+    "1": "13932",   # Yes
+    "2": "13933",   # No
     "None": "-1"
 }
-# Legacy payload structure - kept for tracking
-# {
-#     'step': step_content,
-#     'data': "None",
-#     'result': expected_result,
-#     'attachments': [{
-#         'data': base64_encoded_data,
-#         'filename': file_name,
-#         'contentType': content_type
-#     }]
-# }# Keep attachment payload for tracking
-#                         attachment_payload = {'attachments': [{
-#                             'data': encoded_data,
-#                             'filename': file_name,
-#                             "contentType": "plain/text" #'data:image/png:base64'
-#                         }]}
