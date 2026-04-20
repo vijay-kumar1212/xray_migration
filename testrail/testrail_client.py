@@ -1,4 +1,6 @@
 import base64
+import os
+
 import requests
 
 from utilities.log_mngr import setup_custom_logger
@@ -19,7 +21,9 @@ class TestRailClient:
         self.project_id = project_id
         self.suite_id = suite_id
         self.milestone_id = mile_stone_id
-        (self.user,self.password) = (user, password) if user and password else ("vijaykumar.panga@ivycomptech.com", "Vijay123")
+        user_  = os.environ.get('test_rail_user')
+        password_ = os.environ.get('test_rail_psw')
+        (self.user,self.password) = (user, password) if user and password else (user_,password_)
     #     if we don't have user and password then need to raise an error here
         self.base_url = base_url
         if not base_url.endswith('/'):

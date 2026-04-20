@@ -34,7 +34,7 @@ class XrayClient:
     MAX_ATTACHMENT_WORKERS = 5
 
     def __init__(self,
-                 base_url='https://entain-test.atlassian.net/',
+                 base_url='https://entain.atlassian.net/',
                  project_key='OMNIA',
                  issue_type='Test',
                  test_repo_='Cloud Instance Test',
