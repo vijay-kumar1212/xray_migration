@@ -1,6 +1,6 @@
 import pandas as pd
-source_file = r"C:\xray_migration\xray_migration\E2E Suite to be migrated.xlsx"
-generated_file_from_run = r'C:\xray_migration\xray_migration\E2E Suite To be Migrated_testrail_to_xray_migration_20260312_172233.xlsx'
+source_file = r"C:\xray_migration\xray_migration\retail___omnia_v2.xlsx"
+generated_file_from_run = r'C:\xray_migration\xray_migration\Omnia Acceptance test Pack_testrail_to_xray_migration_20260422_175153.xlsx'
 
 pdg = pd.read_excel(generated_file_from_run)
 pds = pd.read_excel(source_file)

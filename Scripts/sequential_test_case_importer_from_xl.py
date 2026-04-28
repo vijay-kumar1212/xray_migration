@@ -9,7 +9,9 @@ class TestCaseCreation(TestRailClient):
         xray = XrayClient()
         for case_id, test_repo in case_data:
             tr_case_data = self.get_case(case_id).json()
-            test_repo_ = f'/{xray.test_repository}/{test_repo}'  #TODO  f'/{xray.test_repository}/{test_repo}'
+            # `test_repo` from the migration report already contains the full repository path
+            # (e.g. "/Omnia Acceptance test Pack/.../Folder"), so use it as-is.
+            test_repo_ = test_repo if str(test_repo).startswith('/') else f'/{xray.test_repository}/{test_repo}'
 
             # case = xray.get_test_case(key='DF-2292')
             case = xray.create_issue(data=tr_case_data, issue_type='Test',test_repo=test_repo_) # TODO
@@ -38,15 +40,33 @@ class TestCaseCreation(TestRailClient):
 
 
 obj = TestCaseCreation()
-file_1 = pd.read_excel(r"C:\xray_migration\xray_migration\Scripts\omnia cloud instance test.xlsx") #TODO
-file_1['ID'] = file_1['ID'].astype(str).str.replace(r'^C', '', regex=True)
-file_1['Section Hierarchy'] = (file_1['Section Hierarchy'].str.strip()
-        .str.replace(r"[\"']", "", regex=True)
-        .str.replace(r"[\\/]", " & ", regex=True)# remove single quotes  (.str.replace(r"[\\/]", " or ", regex=True)   # replace / or \ with ' or '    *** .str.replace(r"\s*>\s*", "/", regex=True)        # replace > with /)
+
+# Load failed rows from the migration report and re-import them.
+MIGRATION_REPORT = r"C:\Users\VijayKumar.Panga\Downloads\migration_report_20260424_184005.xlsx"
+file_1 = pd.read_excel(MIGRATION_REPORT)
+
+# Keep only rows where the previous export to Xray failed.
+file_1 = file_1[file_1['Export to Xray Status'].astype(str).str.strip().str.lower() == 'failed'].copy()
+
+# Strip leading "C" from TestRail IDs (e.g. "C1468070" -> "1468070").
+file_1['Test Rail Id'] = file_1['Test Rail Id'].astype(str).str.strip().str.replace(r'^C', '', regex=True)
+
+# Normalise the Test Repository path (trim, collapse whitespace, drop stray quotes).
+file_1['Test Repository'] = (
+    file_1['Test Repository'].astype(str).str.strip()
+        +
         .str.replace(r"\s+", " ", regex=True)
-        .str.replace(r"\s*>\s*", "/", regex=True)# clean extra spaces
         .str.strip()
 )
-case_data = list(zip(file_1['ID'], file_1['Section Hierarchy']))
-# case_data = [60493367, 65830055]
+
+case_data = list(zip(file_1['Test Rail Id'], file_1['Test Repository']))
+
+# Skip the first N rows that were already imported in a previous run.
+# Set to 0 (or None) to import all failed rows.
+ALREADY_IMPORTED = 2
+if ALREADY_IMPORTED:
+    case_data = case_data[ALREADY_IMPORTED:]
+    print(f"Skipping first {ALREADY_IMPORTED} already-imported case(s).")
+
+print(f"Retrying {len(case_data)} failed test case(s) from {MIGRATION_REPORT}")
 obj.test_create_case_in_xray(case_data)
