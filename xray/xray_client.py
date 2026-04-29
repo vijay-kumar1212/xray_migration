@@ -515,6 +515,85 @@ class XrayClient:
         self._logger.info(f"Successfully added {len(gql_steps)} steps to {key}")
         return True
 
+    def remove_all_test_steps(self, key):
+        """
+        Remove ALL existing test steps from a Test issue via Xray Cloud GraphQL.
+        Uses getTest(issueId).steps to enumerate step IDs, then calls the
+        removeTestStep mutation for each. Returns (removed, failed) counts.
+        Returns (-1, -1) if the operation could not run at all (e.g. GraphQL
+        unavailable, key not resolvable, unable to read steps).
+        """
+        self._logger.info(f"Removing all steps from test case: {key}")
+
+        if not self._xray_graphql_available:
+            self._logger.error("Xray Cloud GraphQL not available — cannot remove steps")
+            return -1, -1
+
+        # Resolve issue key -> ID
+        try:
+            resp = self._upload_session.get(
+                f"{self.url}rest/api/3/issue/{key}?fields=summary",
+                headers=self.headers, timeout=30)
+            if resp.status_code != 200:
+                self._logger.error(f"Could not resolve {key} to ID: {resp.status_code}")
+                return -1, -1
+            issue_id = resp.json()['id']
+        except Exception as e:
+            self._logger.error(f"Error resolving {key}: {e}")
+            return -1, -1
+
+        # Fetch current step IDs
+        data = self._graphql("""
+            query GetTestSteps($issueId: String!) {
+                getTest(issueId: $issueId) {
+                    steps { id }
+                }
+            }
+        """, {"issueId": issue_id})
+        if data is None or data.get('getTest') is None:
+            self._logger.error(f"Failed to fetch current steps for {key}")
+            return -1, -1
+
+        steps = data['getTest'].get('steps') or []
+        if not steps:
+            self._logger.info(f"{key} has no steps to remove")
+            return 0, 0
+
+        step_ids = [s['id'] for s in steps if s.get('id')]
+        self._logger.info(f"Removing {len(step_ids)} existing step(s) from {key}")
+
+        mutation = """
+            mutation RemoveStep($issueId: String!, $stepId: String!) {
+                removeTestStep(issueId: $issueId, stepId: $stepId)
+            }
+        """
+
+        removed = 0
+        failed = 0
+
+        def _delete_one(step_id):
+            return self._graphql(mutation, {"issueId": issue_id, "stepId": step_id})
+
+        # Parallelise deletions but stay conservative (same cap as attachments)
+        with ThreadPoolExecutor(max_workers=self.MAX_ATTACHMENT_WORKERS) as executor:
+            future_to_id = {executor.submit(_delete_one, sid): sid for sid in step_ids}
+            for future in as_completed(future_to_id):
+                sid = future_to_id[future]
+                try:
+                    result = future.result()
+                except Exception as e:
+                    failed += 1
+                    self._logger.warning(f"removeTestStep raised for step {sid} on {key}: {e}")
+                    continue
+                if result is not None:
+                    removed += 1
+                else:
+                    failed += 1
+                    self._logger.warning(f"removeTestStep returned no data for step {sid} on {key}")
+
+        self._logger.info(f"{key}: removed {removed}/{len(step_ids)} steps ({failed} failed)")
+        return removed, failed
+
     # ===================== ISSUE QUERIES =====================
 
     def update_case_to_repo(self, case_id, test_repo):

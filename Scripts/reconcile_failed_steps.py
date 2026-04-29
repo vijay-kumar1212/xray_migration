@@ -1,33 +1,33 @@
 """
-Reconcile test steps for rows in the migration report where
-'Status of Adding Steps to Xray' == 'Failed'.
+Re-do step migration for rows in the previous reconciliation report.
 
-Workflow (per row):
-  1. Read the migration report and keep only Failed rows. Each row gives
-     us: Test Rail Id (e.g. 'C1468070') and its Xray Key (e.g. 'OMNIA-123').
-  2. Fetch the TestRail case via TestRailClient.get_case() and read
-     'custom_steps_separated'.
-  3. Fetch the current Xray test via XrayClient.get_test_case() and read
-     the steps array (GraphQL getTest.steps).
-  4. Compute the 'effective' TestRail step count using the same filter
-     XrayClient.add_steps_to_the_test_case() applies (steps whose stripped
-     action AND expected are both empty are skipped).
-  5. If effective TestRail count == Xray count -> mark 'Already Matches'.
-     Otherwise call add_steps_to_the_test_case(), which appends the
-     TestRail steps (with attachments) via the addTestStep mutation.
-  6. Re-read Xray step count for verification and record the result.
+Scenario:
+  The prior run produced `steps_reconciliation_report_*.xlsx` with rows
+  whose Action was one of:
+      - 'Add Failed'                  (1723 rows)
+      - 'Error'                       (395 rows)
+      - 'Steps Added (count mismatch)'(142 rows)
+  These rows may now hold partial / garbage steps in Xray. For each
+  such row we:
+      1. Look up the Xray Key and TestRail ID from the report.
+      2. DELETE all existing steps on the Xray test via the Xray Cloud
+         GraphQL `removeTestStep` mutation
+         (XrayClient.remove_all_test_steps).
+      3. FETCH fresh steps from TestRail
+         (TestRailClient.get_case(...).json()['custom_steps_separated']).
+      4. ADD them back into Xray with attachments via
+         XrayClient.add_steps_to_the_test_case (addTestStep mutation).
+      5. VERIFY the post-add step count and record the outcome.
 
 Parallelism:
   Rows are processed concurrently with a bounded ThreadPoolExecutor
-  (MAX_WORKERS). A lock protects the shared result list, counters, and
-  periodic Excel flushes. Both clients use requests.Session with a
-  pooled HTTPAdapter, so sharing a single TestRailClient / XrayClient
-  across threads is fine for this workload.
+  (MAX_WORKERS). Both clients use pooled requests.Session objects, so
+  sharing a single TestRailClient / XrayClient across threads is safe
+  for this workload.
 
 Idempotency:
-  add_steps_to_the_test_case APPENDS steps. If a row has already been
-  reconciled (Xray count == TestRail effective count) a restart skips
-  it. Interruption/restart is therefore safe against the *same* report.
+  The delete-then-add flow leaves the Xray test with exactly the
+  TestRail step set. Re-running on the same input is safe.
 """
 import os
 import sys
@@ -46,27 +46,34 @@ from utilities.log_mngr import setup_custom_logger
 
 
 # ======================== CONFIG ========================
-INPUT_FILE = r"C:\Users\VijayKumar.Panga\Downloads\migration_report_20260424_184005.xlsx"
+INPUT_FILE = r"C:\Users\VijayKumar.Panga\Downloads\steps_reconciliation_report_20260428_113650.xlsx"
 # Save the report next to the other *_report_*.xlsx files, i.e. the
-# xray_migration folder (parent of this Scripts directory). Resolving
-# relative to __file__ keeps it portable across machines/checkouts.
+# xray_migration folder (parent of this Scripts directory).
 OUTPUT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_KEY = 'OMNIA'
 
-# Migration-report column names
-TESTRAIL_ID_COL = 'Test Rail Id'
+# Input report columns
+TESTRAIL_ID_COL = 'TestRail ID'
 XRAY_KEY_COL = 'Xray Key'
-STATUS_COL = 'Status of Adding Steps to Xray'
-FAILED_VALUE = 'failed'  # compared case-insensitively
+ACTION_COL = 'Action'
 
-# Jira custom field that stores the TestRail ID (e.g. "C1468070")
+# Only reprocess rows whose previous Action is in this set.
+# Set to None to reprocess every row in the input file.
+ACTIONS_TO_REPROCESS = {
+    'Add Failed',
+    'Error',
+    'Steps Added (count mismatch)',
+}
+
+# Jira custom field that stores the TestRail ID (e.g. "C1468070") — used
+# as a fallback lookup when the row has no Xray Key.
 TESTRAIL_ID_FIELD = 'customfield_10621'
 
 # Parallelism
-MAX_WORKERS = 5       # concurrent rows. Stay conservative; each row does several API calls.
+MAX_WORKERS = 3       # concurrent rows
 FLUSH_EVERY = 25      # write Excel snapshot every N completed rows
 
-# Set to an int (e.g. 1) to process only the first N failed rows; None = all
+# Set to an int (e.g. 1) to process only the first N rows; None = all
 LIMIT = None
 
 logger = setup_custom_logger()
@@ -129,7 +136,7 @@ def _find_xray_key_for_testrail_id(xray, testrail_id):
 
 
 def _normalise_testrail_id(raw):
-    """Return both the 'C1234' form (for JQL) and the numeric id (for TestRail API)."""
+    """Return (c_form, numeric_id). c_form is 'C1234', numeric_id is int or None."""
     s = str(raw).strip()
     if not s:
         return None, None
@@ -142,28 +149,29 @@ def _normalise_testrail_id(raw):
 
 def flush_report(rows, output_file):
     cols = [
-        'Row', 'TestRail ID', 'Xray Key',
-        'TestRail Total Steps', 'TestRail Effective Steps', 'Xray Steps Before',
-        'Counts Matched', 'Action', 'Xray Steps After', 'Notes'
+        'Row', 'TestRail ID', 'Xray Key', 'Previous Action',
+        'Xray Steps Before', 'Steps Removed', 'Remove Failures',
+        'TestRail Total Steps', 'TestRail Effective Steps',
+        'Add OK', 'Xray Steps After', 'Final Action', 'Notes'
     ]
-    # Sort by original row index so the Excel stays ordered even with parallel completion
     ordered = sorted(rows, key=lambda r: r.get('Row', 0))
     pd.DataFrame(ordered, columns=cols).to_excel(
-        output_file, index=False, sheet_name='Steps Reconciliation')
+        output_file, index=False, sheet_name='Steps Re-migration')
 
 
 # ---------------------- Per-row worker ----------------------
 def _process_row(row_idx, total, row, xray, testrail, has_xray_col):
     """
-    Handle a single failed row. Returns a (result_dict, outcome_bucket)
-    tuple where outcome_bucket is one of:
-      already_matches, steps_added, partial_after_add, failed,
-      not_found, no_testrail_steps.
+    Handle a single row: delete existing Xray steps, then re-add from
+    TestRail. Returns (result_dict, outcome_bucket) where outcome_bucket
+    is one of: steps_readded, partial_after_add, add_failed,
+    remove_failed, not_found, no_testrail_steps, failed.
     """
     raw_testrail_id = str(row[TESTRAIL_ID_COL])
     reported_xray_key = str(row[XRAY_KEY_COL]).strip() if has_xray_col else ''
     if reported_xray_key.lower() in ('', 'nan', 'none'):
         reported_xray_key = ''
+    prev_action = str(row.get(ACTION_COL, '')).strip()
 
     testrail_id, numeric_id = _normalise_testrail_id(raw_testrail_id)
 
@@ -171,19 +179,22 @@ def _process_row(row_idx, total, row, xray, testrail, has_xray_col):
         'Row': row_idx,
         'TestRail ID': testrail_id or raw_testrail_id,
         'Xray Key': reported_xray_key,
+        'Previous Action': prev_action,
+        'Xray Steps Before': '',
+        'Steps Removed': '',
+        'Remove Failures': '',
         'TestRail Total Steps': '',
         'TestRail Effective Steps': '',
-        'Xray Steps Before': '',
-        'Counts Matched': '',
-        'Action': '',
+        'Add OK': '',
         'Xray Steps After': '',
+        'Final Action': '',
         'Notes': '',
     }
 
     prefix = f"[{row_idx}/{total}]"
 
     if numeric_id is None:
-        result['Action'] = 'Skipped'
+        result['Final Action'] = 'Skipped'
         result['Notes'] = f'Invalid TestRail ID: {raw_testrail_id}'
         logger.warning(f"{prefix} invalid TestRail ID '{raw_testrail_id}'")
         return result, 'failed'
@@ -194,19 +205,28 @@ def _process_row(row_idx, total, row, xray, testrail, has_xray_col):
         xray_key = _find_xray_key_for_testrail_id(xray, testrail_id)
         if xray_key:
             result['Xray Key'] = xray_key
-
     if not xray_key:
-        result['Action'] = 'Skipped'
+        result['Final Action'] = 'Skipped'
         result['Notes'] = 'No Xray Key in report and JQL lookup returned nothing'
         logger.warning(f"{prefix} {testrail_id}: no Xray key resolved")
         return result, 'not_found'
 
-    # 2. Fetch TestRail case + steps
+    # 2. Snapshot current Xray step count
+    xray_before, _ = _get_xray_step_count(xray, xray_key)
+    if xray_before < 0:
+        result['Final Action'] = 'Error'
+        result['Notes'] = 'Could not read Xray steps via GraphQL (before)'
+        logger.warning(f"{prefix} {xray_key}: failed to read Xray steps before remove")
+        return result, 'failed'
+    result['Xray Steps Before'] = xray_before
+
+    # 3. Fetch TestRail steps FIRST so that if TestRail is down we never
+    #    delete without being able to re-add.
     try:
         tr_resp = testrail.get_case(numeric_id)
         tr_case = tr_resp.json() if tr_resp is not None else {}
     except Exception as e:
-        result['Action'] = 'Error'
+        result['Final Action'] = 'Error'
         result['Notes'] = f'TestRail get_case failed: {e}'
         logger.warning(f"{prefix} {testrail_id}: TestRail error - {e}")
         return result, 'failed'
@@ -218,93 +238,106 @@ def _process_row(row_idx, total, row, xray, testrail, has_xray_col):
     result['TestRail Effective Steps'] = tr_effective
 
     if tr_effective == 0:
-        result['Action'] = 'Skipped'
+        result['Final Action'] = 'Skipped'
         result['Notes'] = 'TestRail case has no steps with non-empty action/expected'
-        logger.info(f"{prefix} {xray_key}: TestRail has 0 effective steps, skipping")
+        logger.info(f"{prefix} {xray_key}: TestRail has 0 effective steps, skipping remove/add")
         return result, 'no_testrail_steps'
 
-    # 3. Fetch current Xray step count
-    xray_before, _ = _get_xray_step_count(xray, xray_key)
-    if xray_before < 0:
-        result['Action'] = 'Error'
-        result['Notes'] = 'Could not read Xray steps via GraphQL'
-        logger.warning(f"{prefix} {xray_key}: failed to read Xray steps")
+    # 4. Remove all existing steps from the Xray test
+    try:
+        removed, remove_failed = xray.remove_all_test_steps(xray_key)
+    except Exception as e:
+        result['Final Action'] = 'Error'
+        result['Notes'] = f'remove_all_test_steps raised: {e}'
+        logger.warning(f"{prefix} {xray_key}: remove_all_test_steps raised - {e}")
         return result, 'failed'
-    result['Xray Steps Before'] = xray_before
 
-    # 4. Compare counts
-    if xray_before == tr_effective:
-        result['Counts Matched'] = 'Yes'
-        result['Action'] = 'Already Matches'
-        result['Xray Steps After'] = xray_before
-        logger.info(f"{prefix} {xray_key}: step counts already match ({xray_before}), skipping")
-        return result, 'already_matches'
+    if removed < 0:
+        result['Final Action'] = 'Remove Failed'
+        result['Notes'] = 'remove_all_test_steps could not enumerate steps'
+        logger.warning(f"{prefix} {xray_key}: could not enumerate/delete existing steps")
+        return result, 'remove_failed'
 
-    result['Counts Matched'] = 'No'
+    result['Steps Removed'] = removed
+    result['Remove Failures'] = remove_failed
+    if remove_failed > 0:
+        logger.warning(f"{prefix} {xray_key}: {remove_failed} step(s) failed to delete — "
+                       f"continuing with add anyway")
 
-    # 5. Add steps (with attachments) to Xray — this APPENDS, not replaces
+    # 5. Add fresh steps (with attachments) from TestRail
     try:
         ok = xray.add_steps_to_the_test_case(xray_key, steps=tr_steps,
                                              testrail_client=testrail)
     except Exception as e:
-        result['Action'] = 'Error'
+        result['Add OK'] = False
+        result['Final Action'] = 'Add Error'
         result['Notes'] = f'add_steps_to_the_test_case raised: {e}'
         logger.warning(f"{prefix} {xray_key}: add_steps raised - {e}")
-        return result, 'failed'
+        return result, 'add_failed'
+    result['Add OK'] = bool(ok)
 
-    # 6. Re-read Xray step count to verify
+    # 6. Verify final step count
     xray_after, _ = _get_xray_step_count(xray, xray_key)
     result['Xray Steps After'] = xray_after if xray_after >= 0 else ''
 
     if not ok:
-        result['Action'] = 'Add Failed'
+        result['Final Action'] = 'Add Failed'
         result['Notes'] = 'add_steps_to_the_test_case returned False (see log)'
         logger.warning(f"{prefix} {xray_key}: add_steps returned False")
-        return result, 'failed'
+        return result, 'add_failed'
 
-    expected_after = xray_before + tr_effective
-    if xray_after == expected_after or xray_after == tr_effective:
-        result['Action'] = 'Steps Added'
-        logger.info(f"{prefix} {xray_key}: added {tr_effective} steps "
+    if xray_after == tr_effective:
+        result['Final Action'] = 'Steps Re-added'
+        logger.info(f"{prefix} {xray_key}: re-added {tr_effective} steps "
                     f"(before={xray_before}, after={xray_after})")
-        return result, 'steps_added'
+        return result, 'steps_readded'
 
-    result['Action'] = 'Steps Added (count mismatch)'
-    result['Notes'] = (f'Expected after={expected_after} or ={tr_effective}, '
-                       f'got {xray_after}')
+    result['Final Action'] = 'Steps Added (count mismatch)'
+    result['Notes'] = (f'Expected after={tr_effective}, got {xray_after} '
+                       f'(removed={removed}, remove_failed={remove_failed})')
     logger.warning(f"{prefix} {xray_key}: post-add count mismatch "
-                   f"(expected {expected_after} or {tr_effective}, got {xray_after})")
+                   f"(expected {tr_effective}, got {xray_after})")
     return result, 'partial_after_add'
 
 
 # ---------------------- Main ----------------------
 def main():
-    logger.info(f"=== Reconciling failed steps from: {INPUT_FILE} ===")
+    logger.info(f"=== Re-doing step migration from: {INPUT_FILE} ===")
     df = pd.read_excel(INPUT_FILE)
 
-    for col in (TESTRAIL_ID_COL, STATUS_COL):
+    for col in (TESTRAIL_ID_COL, XRAY_KEY_COL):
         if col not in df.columns:
             logger.error(f"Required column '{col}' missing from {INPUT_FILE}")
-            print(f"ERROR: column '{col}' not found")
+            print(f"ERROR: column '{col}' not found in input")
             return
 
-    failed = df[df[STATUS_COL].astype(str).str.strip().str.lower() == FAILED_VALUE].copy()
-    failed[TESTRAIL_ID_COL] = failed[TESTRAIL_ID_COL].astype(str).str.strip()
-    has_xray_col = XRAY_KEY_COL in failed.columns
-    if has_xray_col:
-        failed[XRAY_KEY_COL] = failed[XRAY_KEY_COL].astype(str).str.strip()
+    has_action_col = ACTION_COL in df.columns
+    if ACTIONS_TO_REPROCESS is not None:
+        if not has_action_col:
+            logger.error(f"Column '{ACTION_COL}' missing — cannot filter by action")
+            print(f"ERROR: column '{ACTION_COL}' missing. Set ACTIONS_TO_REPROCESS=None to process all rows.")
+            return
+        mask = df[ACTION_COL].astype(str).str.strip().isin(ACTIONS_TO_REPROCESS)
+        target = df[mask].copy()
+    else:
+        target = df.copy()
 
-    total_failed = len(failed)
-    logger.info(f"Found {total_failed} rows with '{STATUS_COL}' == Failed")
-    print(f"Found {total_failed} rows with '{STATUS_COL}' == Failed")
-    if total_failed == 0:
+    target[TESTRAIL_ID_COL] = target[TESTRAIL_ID_COL].astype(str).str.strip()
+    target[XRAY_KEY_COL] = target[XRAY_KEY_COL].astype(str).str.strip()
+
+    total_target = len(target)
+    logger.info(f"Found {total_target} rows to reprocess "
+                f"(filter={sorted(ACTIONS_TO_REPROCESS) if ACTIONS_TO_REPROCESS else 'ALL'})")
+    print(f"Found {total_target} rows to reprocess "
+          f"(filter={sorted(ACTIONS_TO_REPROCESS) if ACTIONS_TO_REPROCESS else 'ALL'})")
+    if total_target == 0:
         return
 
     if LIMIT is not None and LIMIT > 0:
-        failed = failed.head(LIMIT).copy()
-        logger.info(f"LIMIT={LIMIT} -> processing only the first {len(failed)} row(s)")
-        print(f"LIMIT={LIMIT} -> processing only the first {len(failed)} row(s)")
-    total = len(failed)
+        target = target.head(LIMIT).copy()
+        logger.info(f"LIMIT={LIMIT} -> processing only the first {len(target)} row(s)")
+        print(f"LIMIT={LIMIT} -> processing only the first {len(target)} row(s)")
+    total = len(target)
 
     xray = XrayClient(project_key=PROJECT_KEY)
     if not xray._xray_graphql_available:
@@ -316,26 +349,27 @@ def main():
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    output_file = os.path.join(OUTPUT_DIR, f"steps_reconciliation_report_{timestamp}.xlsx")
+    output_file = os.path.join(OUTPUT_DIR, f"steps_remigration_report_{timestamp}.xlsx")
 
     rows = []
     counters = {
-        'already_matches': 0,
-        'steps_added': 0,
+        'steps_readded': 0,
         'partial_after_add': 0,
-        'failed': 0,
-        'not_found': 0,
+        'add_failed': 0,
+        'remove_failed': 0,
         'no_testrail_steps': 0,
+        'not_found': 0,
+        'failed': 0,
     }
     state_lock = threading.Lock()
     start_time = time.time()
 
-    # Build the task list with a stable 1-based row index for logging / sorting.
-    reset = failed.reset_index(drop=True)
+    reset = target.reset_index(drop=True)
+    has_xray_col = XRAY_KEY_COL in reset.columns
     tasks = [(i + 1, r) for i, r in enumerate(reset.to_dict('records'))]
 
-    logger.info(f"Starting parallel reconciliation: {total} rows, MAX_WORKERS={MAX_WORKERS}")
-    print(f"Starting parallel reconciliation: {total} rows, MAX_WORKERS={MAX_WORKERS}")
+    logger.info(f"Starting parallel re-migration: {total} rows, MAX_WORKERS={MAX_WORKERS}")
+    print(f"Starting parallel re-migration: {total} rows, MAX_WORKERS={MAX_WORKERS}")
 
     completed = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -351,11 +385,11 @@ def main():
                 logger.exception(f"[{idx}/{total}] worker crashed: {e}")
                 result = {
                     'Row': idx,
-                    'TestRail ID': '', 'Xray Key': '',
+                    'TestRail ID': '', 'Xray Key': '', 'Previous Action': '',
+                    'Xray Steps Before': '', 'Steps Removed': '', 'Remove Failures': '',
                     'TestRail Total Steps': '', 'TestRail Effective Steps': '',
-                    'Xray Steps Before': '', 'Counts Matched': '',
-                    'Action': 'Error',
-                    'Xray Steps After': '',
+                    'Add OK': '', 'Xray Steps After': '',
+                    'Final Action': 'Error',
                     'Notes': f'Worker crashed: {e}',
                 }
                 bucket = 'failed'
@@ -367,28 +401,31 @@ def main():
                 if completed % FLUSH_EVERY == 0:
                     flush_report(rows, output_file)
                     logger.info(f"Progress: {completed}/{total} "
-                                f"(added={counters['steps_added']}, "
-                                f"matched={counters['already_matches']}, "
-                                f"failed={counters['failed']}, "
-                                f"not_found={counters['not_found']})")
+                                f"(re-added={counters['steps_readded']}, "
+                                f"partial={counters['partial_after_add']}, "
+                                f"add_failed={counters['add_failed']}, "
+                                f"remove_failed={counters['remove_failed']}, "
+                                f"not_found={counters['not_found']}, "
+                                f"failed={counters['failed']})")
 
     flush_report(rows, output_file)
 
     elapsed = time.time() - start_time
     summary = (
         f"\n{'='*60}\n"
-        f"Steps Reconciliation Summary\n"
+        f"Steps Re-migration Summary\n"
         f"{'='*60}\n"
-        f"Total rows processed:        {total}\n"
-        f"Parallel workers:            {MAX_WORKERS}\n"
-        f"Already matched (no action): {counters['already_matches']}\n"
-        f"Steps added successfully:    {counters['steps_added']}\n"
-        f"Added but count mismatch:    {counters['partial_after_add']}\n"
-        f"No TestRail steps to add:    {counters['no_testrail_steps']}\n"
-        f"Xray key not resolved:       {counters['not_found']}\n"
-        f"Failed / errored:            {counters['failed']}\n"
-        f"Elapsed:                     {elapsed/60:.1f} minutes\n"
-        f"Report saved:                {output_file}\n"
+        f"Total rows processed:         {total}\n"
+        f"Parallel workers:             {MAX_WORKERS}\n"
+        f"Steps re-added (count match): {counters['steps_readded']}\n"
+        f"Added but count mismatch:     {counters['partial_after_add']}\n"
+        f"Add failed:                   {counters['add_failed']}\n"
+        f"Remove failed:                {counters['remove_failed']}\n"
+        f"No TestRail steps to add:     {counters['no_testrail_steps']}\n"
+        f"Xray key not resolved:        {counters['not_found']}\n"
+        f"Other errors:                 {counters['failed']}\n"
+        f"Elapsed:                      {elapsed/60:.1f} minutes\n"
+        f"Report saved:                 {output_file}\n"
         f"{'='*60}"
     )
     logger.info(summary)
